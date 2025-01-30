@@ -41,7 +41,8 @@ int main(int argc, const char **argv) {
       auto type = surface.GetType();
       std::cout << type << ")...";
       if (type == GeomAbs_BSplineSurface) {
-        auto bspline = surface.BSpline().get();
+        auto bspline_handler = surface.BSpline();
+        auto bspline = bspline_handler.get();
         fout << std::format("n = {}\nm = {}\n", bspline->NbUPoles()-1, bspline->NbVPoles()-1);
         fout << "points:" << std::endl;
         for (auto &point: bspline->Poles()) {
@@ -49,9 +50,18 @@ int main(int argc, const char **argv) {
         }
         fout << std::endl;
         fout << "weights:" << std::endl;
-        for (auto &weight: *bspline->Weights()) {
-          fout << weight << " ";
+        if (bspline->Weights() != nullptr) {
+          for (auto &weight: *bspline->Weights()) {
+            fout << weight << " ";
+          }
+        } else {
+          for (int i = 0; i < bspline->NbUPoles(); ++i) 
+          for (int j = 0; j < bspline->NbVPoles(); ++j)
+          {
+            fout << 1.0f << " ";
+          }
         }
+        
         fout << std::endl;
         fout << std::format("u_degree: {}\nv_degree: {}\n", bspline->UDegree(), bspline->VDegree());
         fout << "u_knots: ";
@@ -65,7 +75,8 @@ int main(int argc, const char **argv) {
         }
         fout << std::endl;
       } else if (type == GeomAbs_BezierSurface) {
-        auto bezier = surface.Bezier().get();
+        auto bezier_handler = surface.Bezier();
+        auto bezier = bezier_handler.get();
         fout << std::format("n = {}\nm = {}\n", bezier->NbUPoles()-1, bezier->NbVPoles()-1);
         fout << "points:" << std::endl;
         for (auto &point: bezier->Poles()) {
@@ -73,8 +84,16 @@ int main(int argc, const char **argv) {
         }
         fout << std::endl;
         fout << "weights:" << std::endl;
-        for (auto &weight: *bezier->Weights()) {
-          fout << weight << " ";
+        if (bezier->Weights() != nullptr) {
+          for (auto &weight: *bezier->Weights()) {
+            fout << weight << " ";
+          }
+        } else {
+          for (int i = 0; i < bezier->NbUPoles(); ++i) 
+          for (int j = 0; j < bezier->NbVPoles(); ++j)
+          {
+            fout << 1.0f << " ";
+          }
         }
         fout << std::endl;
         fout << std::format("u_degree: {}\nv_degree: {}\n", bezier->UDegree(), bezier->VDegree());
