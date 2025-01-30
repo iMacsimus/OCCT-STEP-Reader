@@ -33,6 +33,9 @@ int main(int argc, const char **argv) {
     auto shape = reader.Shape(i);
     // load each solid as an own object
     TopExp_Explorer ex;
+    int count_bspline = 0;
+    int count_bezier = 0;
+    int count_planes = 0;
     int count = 0;
     for (ex.Init(shape, TopAbs_FACE); ex.More(); ex.Next()) {
       std::cout << "Output " << count++ << " surface(Type: ";
@@ -41,6 +44,7 @@ int main(int argc, const char **argv) {
       auto type = surface.GetType();
       std::cout << type << ")...";
       if (type == GeomAbs_BSplineSurface) {
+        ++count_bspline;
         auto bspline_handler = surface.BSpline();
         auto bspline = bspline_handler.get();
         fout << std::format("n = {}\nm = {}\n", bspline->NbUPoles()-1, bspline->NbVPoles()-1);
@@ -75,6 +79,7 @@ int main(int argc, const char **argv) {
         }
         fout << std::endl;
       } else if (type == GeomAbs_BezierSurface) {
+        ++count_bezier;
         auto bezier_handler = surface.Bezier();
         auto bezier = bezier_handler.get();
         fout << std::format("n = {}\nm = {}\n", bezier->NbUPoles()-1, bezier->NbVPoles()-1);
@@ -111,11 +116,12 @@ int main(int argc, const char **argv) {
         fout << std::endl;
       } else if (type == GeomAbs_Plane) {
         //TODO
+        ++count_planes;
       }
       std::cout << "Done." << std::endl;
     } 
+    std::cout << std::format("Stats: {} nurbs, {} rbeziers, {} planes", 
+        count_bspline, count_bezier, count_planes) << std::endl;
   }
-
-  
   return 0;
 }
