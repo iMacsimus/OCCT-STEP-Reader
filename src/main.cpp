@@ -14,6 +14,9 @@
 #include <Geom_BSplineSurface.hxx>
 #include <Geom_BezierSurface.hxx>
 #include <Poly_Triangulation.hxx>
+#include <GeomConvert.hxx>
+#include <Geom_Surface.hxx>
+#include <BRepBuilderAPI_NurbsConvert.hxx>
 
 constexpr std::array type_names = {
   "GeomAbs_Plane",
@@ -28,6 +31,76 @@ constexpr std::array type_names = {
   "GeomAbs_OffsetSurface",
   "GeomAbs_OtherSurface"
 };
+
+void output_nurbs(Geom_BSplineSurface *bspline, std::ofstream &fout) {
+  fout << std::format("n = {}\nm = {}\n", bspline->NbUPoles()-1, bspline->NbVPoles()-1);
+  fout << "points:" << std::endl;
+  for (auto &point: bspline->Poles()) {
+    fout << std::format("{{{}, {}, {}}} ", point.X(), point.Y(), point.Z());
+  }
+  fout << std::endl;
+  fout << "weights:" << std::endl;
+  if (bspline->Weights() != nullptr) {
+    for (auto &weight: *bspline->Weights()) {
+      fout << weight << " ";
+    }
+  } else {
+    for (int i = 0; i < bspline->NbUPoles(); ++i) 
+    for (int j = 0; j < bspline->NbVPoles(); ++j)
+    {
+      fout << 1.0f << " ";
+    }
+  }
+  
+  fout << std::endl;
+  fout << std::format("u_degree: {}\nv_degree: {}\n", bspline->UDegree(), bspline->VDegree());
+  fout << "u_knots: ";
+  for (auto &knot: bspline->UKnotSequence()) {
+    fout << knot << " ";
+  }
+  fout << std::endl;
+  fout << "v_knots: ";
+  for (auto &knot: bspline->VKnotSequence()) {
+    fout << knot << " ";
+  }
+  fout << std::endl;
+}
+
+void output_rbezier(Geom_BezierSurface *bezier, std::ofstream &fout)
+{
+  fout << std::format("n = {}\nm = {}\n", bezier->NbUPoles()-1, bezier->NbVPoles()-1);
+  fout << "points:" << std::endl;
+  for (auto &point: bezier->Poles()) {
+    fout << std::format("{{{}, {}, {}}} ", point.X(), point.Y(), point.Z());
+  }
+  fout << std::endl;
+  fout << "weights:" << std::endl;
+  if (bezier->Weights() != nullptr) {
+    for (auto &weight: *bezier->Weights()) {
+      fout << weight << " ";
+    }
+  } else {
+    for (int i = 0; i < bezier->NbUPoles(); ++i) 
+    for (int j = 0; j < bezier->NbVPoles(); ++j)
+    {
+      fout << 1.0f << " ";
+    }
+  }
+  fout << std::endl;
+  fout << std::format("u_degree: {}\nv_degree: {}\n", bezier->UDegree(), bezier->VDegree());
+  fout << "u_knots: ";
+  Standard_Real umin, umax, vmin, vmax;
+  bezier->Bounds(umin, umax, vmin, vmax);
+  for (int i = 0; i < (bezier->NbUPoles()+bezier->UDegree()+1); ++i) {
+    fout << (i < (bezier->NbUPoles()+bezier->UDegree()+1)/2 ? umin : umax) << " ";
+  }
+  fout << std::endl;
+  fout << "v_knots: ";
+  for (int i = 0; i < (bezier->NbUPoles()+bezier->UDegree()+1); ++i) {
+    fout << (i < (bezier->NbUPoles()+bezier->UDegree()+1)/2 ? vmin : vmax) << " ";
+  }
+  fout << std::endl;
+}
 
 void transfer_all_shapes(STEPControl_Reader &reader, std::ofstream &fout) {
   std::cout << "Transferring roots..." << std::flush;
@@ -44,82 +117,34 @@ void transfer_all_shapes(STEPControl_Reader &reader, std::ofstream &fout) {
     TopExp_Explorer ex;
     for (ex.Init(shape, TopAbs_FACE); ex.More(); ex.Next()) {
       std::cout << "Output " << count++ << " surface(Type: ";
-      const TopoDS_Face &face = TopoDS::Face(ex.Current());
+      TopoDS_Face face = TopoDS::Face(ex.Current());
       BRepAdaptor_Surface surface(face);
       auto type = surface.GetType();
-      std::cout << type_names[type] << ")...";
+      std::cout << type_names[type] << ")..." << std::flush;
       ++type_counts[type];
+      
       if (type == GeomAbs_BSplineSurface) {
         auto bspline_handler = surface.BSpline();
         auto bspline = bspline_handler.get();
-        fout << std::format("n = {}\nm = {}\n", bspline->NbUPoles()-1, bspline->NbVPoles()-1);
-        fout << "points:" << std::endl;
-        for (auto &point: bspline->Poles()) {
-          fout << std::format("{{{}, {}, {}}} ", point.X(), point.Y(), point.Z());
-        }
-        fout << std::endl;
-        fout << "weights:" << std::endl;
-        if (bspline->Weights() != nullptr) {
-          for (auto &weight: *bspline->Weights()) {
-            fout << weight << " ";
-          }
-        } else {
-          for (int i = 0; i < bspline->NbUPoles(); ++i) 
-          for (int j = 0; j < bspline->NbVPoles(); ++j)
-          {
-            fout << 1.0f << " ";
-          }
-        }
-        
-        fout << std::endl;
-        fout << std::format("u_degree: {}\nv_degree: {}\n", bspline->UDegree(), bspline->VDegree());
-        fout << "u_knots: ";
-        for (auto &knot: bspline->UKnotSequence()) {
-          fout << knot << " ";
-        }
-        fout << std::endl;
-        fout << "v_knots: ";
-        for (auto &knot: bspline->VKnotSequence()) {
-          fout << knot << " ";
-        }
-        fout << std::endl;
+        output_nurbs(bspline, fout);
       } else if (type == GeomAbs_BezierSurface) {
         auto bezier_handler = surface.Bezier();
         auto bezier = bezier_handler.get();
-        fout << std::format("n = {}\nm = {}\n", bezier->NbUPoles()-1, bezier->NbVPoles()-1);
-        fout << "points:" << std::endl;
-        for (auto &point: bezier->Poles()) {
-          fout << std::format("{{{}, {}, {}}} ", point.X(), point.Y(), point.Z());
+        output_rbezier(bezier, fout);
+      } else {
+        std::cout << "Converting to Bspline..." << std::flush;
+        try {
+          BRepBuilderAPI_NurbsConvert convertor(face);
+          face = TopoDS::Face(convertor.Shape());
+          surface = face;
+          auto bspline_handler = surface.BSpline();
+          auto bspline = bspline_handler.get();
+          output_nurbs(bspline, fout);
+        } catch(...) {
+          std::cout << "Failed. Skip." << std::endl;
+          continue;
         }
-        fout << std::endl;
-        fout << "weights:" << std::endl;
-        if (bezier->Weights() != nullptr) {
-          for (auto &weight: *bezier->Weights()) {
-            fout << weight << " ";
-          }
-        } else {
-          for (int i = 0; i < bezier->NbUPoles(); ++i) 
-          for (int j = 0; j < bezier->NbVPoles(); ++j)
-          {
-            fout << 1.0f << " ";
-          }
-        }
-        fout << std::endl;
-        fout << std::format("u_degree: {}\nv_degree: {}\n", bezier->UDegree(), bezier->VDegree());
-        fout << "u_knots: ";
-        Standard_Real umin, umax, vmin, vmax;
-        bezier->Bounds(umin, umax, vmin, vmax);
-        for (int i = 0; i < (bezier->NbUPoles()+bezier->UDegree()+1); ++i) {
-          fout << (i < (bezier->NbUPoles()+bezier->UDegree()+1)/2 ? umin : umax) << " ";
-        }
-        fout << std::endl;
-        fout << "v_knots: ";
-        for (int i = 0; i < (bezier->NbUPoles()+bezier->UDegree()+1); ++i) {
-          fout << (i < (bezier->NbUPoles()+bezier->UDegree()+1)/2 ? vmin : vmax) << " ";
-        }
-        fout << std::endl;
-      } else if (type == GeomAbs_Plane) {
-        //TODO
+        
       }
       std::cout << "Done." << std::endl;
     }
