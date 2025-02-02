@@ -2,49 +2,54 @@
 #include <cassert>
 #include <fstream>
 #include <format>
+#include <array>
 
 #include <STEPControl_Reader.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS.hxx>
 #include <BRepTools.hxx>
+#include <BRep_Tool.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <Geom_BSplineSurface.hxx>
 #include <Geom_BezierSurface.hxx>
+#include <Poly_Triangulation.hxx>
 
+constexpr std::array type_names = {
+  "GeomAbs_Plane",
+  "GeomAbs_Cylinder",
+  "GeomAbs_Cone",
+  "GeomAbs_Sphere",
+  "GeomAbs_Torus",
+  "GeomAbs_BezierSurface",
+  "GeomAbs_BSplineSurface",
+  "GeomAbs_SurfaceOfRevolution",
+  "GeomAbs_SurfaceOfExtrusion",
+  "GeomAbs_OffsetSurface",
+  "GeomAbs_OtherSurface"
+};
 
-int main(int argc, const char **argv) {
-  STEPControl_Reader reader;
-  IFSelect_ReturnStatus stat = reader.ReadFile(argv[1]);
-  reader.PrintCheckLoad(true, IFSelect_PrintCount::IFSelect_ListByItem);
-
-  std::ofstream fout(std::string(argv[2])+".nurbss");
-  
-  auto roots_for_transfer = reader.NbRootsForTransfer();
-  for (int i = 1; i <= roots_for_transfer; ++i) {
-    std::cout << "Transferring root " << i << "...";
-    reader.TransferOneRoot(i);
-    std::cout << "Done." << std::endl;
-  }
+void transfer_all_shapes(STEPControl_Reader &reader, std::ofstream &fout) {
+  std::cout << "Transferring roots..." << std::flush;
+  reader.TransferRoots();
+  std::cout << "Done." << std::endl;
 
   auto shapes_for_transfer = reader.NbShapes();
+  std::array<int, type_names.size()> type_counts = {};
+  int count = 0;
   for (int i = 1; i <= shapes_for_transfer; ++i) {
-    std::cout << "Transferring shape " << shapes_for_transfer << "..." << std::endl;
+    std::cout << std::format("Transferring shape {}/{}...", i, shapes_for_transfer) << std::endl;
     auto shape = reader.Shape(i);
     // load each solid as an own object
     TopExp_Explorer ex;
-    int count_bspline = 0;
-    int count_bezier = 0;
-    int count_planes = 0;
-    int count = 0;
     for (ex.Init(shape, TopAbs_FACE); ex.More(); ex.Next()) {
       std::cout << "Output " << count++ << " surface(Type: ";
       const TopoDS_Face &face = TopoDS::Face(ex.Current());
       BRepAdaptor_Surface surface(face);
       auto type = surface.GetType();
-      std::cout << type << ")...";
+      std::cout << type_names[type] << ")...";
+      ++type_counts[type];
       if (type == GeomAbs_BSplineSurface) {
-        ++count_bspline;
         auto bspline_handler = surface.BSpline();
         auto bspline = bspline_handler.get();
         fout << std::format("n = {}\nm = {}\n", bspline->NbUPoles()-1, bspline->NbVPoles()-1);
@@ -79,7 +84,6 @@ int main(int argc, const char **argv) {
         }
         fout << std::endl;
       } else if (type == GeomAbs_BezierSurface) {
-        ++count_bezier;
         auto bezier_handler = surface.Bezier();
         auto bezier = bezier_handler.get();
         fout << std::format("n = {}\nm = {}\n", bezier->NbUPoles()-1, bezier->NbVPoles()-1);
@@ -116,12 +120,23 @@ int main(int argc, const char **argv) {
         fout << std::endl;
       } else if (type == GeomAbs_Plane) {
         //TODO
-        ++count_planes;
       }
       std::cout << "Done." << std::endl;
-    } 
-    std::cout << std::format("Stats: {} nurbs, {} rbeziers, {} planes", 
-        count_bspline, count_bezier, count_planes) << std::endl;
+    }
   }
+  std::cout << "Stats:" << std::endl;
+  for (int i = 0; i < type_names.size(); ++i) {
+    std::cout << type_names[i] << ": " << type_counts[i] << std::endl;
+  }
+}
+
+int main(int argc, const char **argv) {
+  STEPControl_Reader reader;
+  IFSelect_ReturnStatus stat = reader.ReadFile(argv[1]);
+  reader.PrintCheckLoad(true, IFSelect_PrintCount::IFSelect_ListByItem);
+
+  std::ofstream fout(std::string(argv[2])+".nurbss");
+  transfer_all_shapes(reader, fout);
+  
   return 0;
 }
