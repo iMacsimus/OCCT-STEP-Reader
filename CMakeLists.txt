@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.13)
 project(OCCT_Parser)
 set(CMAKE_CXX_STANDARD 20)
 
+add_definitions(-DOCC_CONVERT_SIGNALS)
+
 set(OCCT_LIBS 
   TKBinL
   TKBin

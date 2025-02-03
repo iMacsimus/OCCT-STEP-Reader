@@ -17,6 +17,7 @@
 #include <GeomConvert.hxx>
 #include <Geom_Surface.hxx>
 #include <BRepBuilderAPI_NurbsConvert.hxx>
+#include <OSD.hxx>
 
 constexpr std::array type_names = {
   "GeomAbs_Plane",
@@ -110,10 +111,10 @@ void transfer_all_shapes(STEPControl_Reader &reader, std::ofstream &fout) {
   auto shapes_for_transfer = reader.NbShapes();
   std::array<int, type_names.size()> type_counts = {};
   int count = 0;
+  std::vector<std::string> fails = {};
   for (int i = 1; i <= shapes_for_transfer; ++i) {
     std::cout << std::format("Transferring shape {}/{}...", i, shapes_for_transfer) << std::endl;
     auto shape = reader.Shape(i);
-    // load each solid as an own object
     TopExp_Explorer ex;
     for (ex.Init(shape, TopAbs_FACE); ex.More(); ex.Next()) {
       std::cout << "Output " << count++ << " surface(Type: ";
@@ -134,14 +135,20 @@ void transfer_all_shapes(STEPControl_Reader &reader, std::ofstream &fout) {
       } else {
         std::cout << "Converting to Bspline..." << std::flush;
         try {
+          OCC_CATCH_SIGNALS
+
           BRepBuilderAPI_NurbsConvert convertor(face);
           face = TopoDS::Face(convertor.Shape());
           surface = face;
           auto bspline_handler = surface.BSpline();
           auto bspline = bspline_handler.get();
           output_nurbs(bspline, fout);
-        } catch(...) {
+        } catch(Standard_Failure &theExec) {
           std::cout << "Failed. Skip." << std::endl;
+          std::cerr << "\t" << theExec << std::endl;
+          fails.push_back(std::to_string(count)+": "+theExec.GetMessageString());
+          std::string aName = std::string("face") + std::to_string(count) + std::string(".brep");
+          BRepTools::Write(face, aName.c_str());
           continue;
         }
         
@@ -149,13 +156,21 @@ void transfer_all_shapes(STEPControl_Reader &reader, std::ofstream &fout) {
       std::cout << "Done." << std::endl;
     }
   }
+  std::cout << "-------------" << std::endl;
   std::cout << "Stats:" << std::endl;
   for (int i = 0; i < type_names.size(); ++i) {
     std::cout << type_names[i] << ": " << type_counts[i] << std::endl;
   }
+  std::cout << "-------------" << std::endl;
+  std::cout << "Fails: " << fails.size() << std::endl;
+  for (auto &fail: fails) {
+    std::cout << fail << std::endl;
+  }
+  std::cout << "All failed faces was dumped to .brep files" << std::endl;
 }
 
 int main(int argc, const char **argv) {
+  OSD::SetSignal(false);
   STEPControl_Reader reader;
   IFSelect_ReturnStatus stat = reader.ReadFile(argv[1]);
   reader.PrintCheckLoad(true, IFSelect_PrintCount::IFSelect_ListByItem);
