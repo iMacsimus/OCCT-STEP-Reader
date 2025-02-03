@@ -166,7 +166,7 @@ void transfer_all_shapes(STEPControl_Reader &reader, std::ofstream &fout) {
   for (auto &fail: fails) {
     std::cout << fail << std::endl;
   }
-  std::cout << "All failed faces was dumped to .brep files" << std::endl;
+  std::cout << "All failed faces were dumped to .brep files" << std::endl;
 }
 
 int main(int argc, const char **argv) {
