@@ -34,6 +34,12 @@ constexpr std::array type_names = {
 };
 
 void output_nurbs(Geom_BSplineSurface *bspline, std::ofstream &fout) {
+  if (bspline->IsUPeriodic()) {
+    bspline->SetUNotPeriodic();
+  }
+  if (bspline->IsVPeriodic()) {
+    bspline->SetVNotPeriodic();
+  }
   fout << std::format("n = {}\nm = {}\n", bspline->NbUPoles()-1, bspline->NbVPoles()-1);
   fout << "points:" << std::endl;
   for (auto &point: bspline->Poles()) {
