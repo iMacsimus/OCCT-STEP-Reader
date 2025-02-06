@@ -3,6 +3,8 @@
 #include <fstream>
 #include <format>
 #include <array>
+#include <chrono>
+#include <thread>
 
 #include <STEPControl_Reader.hxx>
 #include <TopExp_Explorer.hxx>
@@ -18,6 +20,9 @@
 #include <Geom_Surface.hxx>
 #include <BRepBuilderAPI_NurbsConvert.hxx>
 #include <OSD.hxx>
+#include <Message_ProgressIndicator.hxx>
+#include <Message_ProgressRange.hxx>
+#include <ShapeUpgrade_ShapeDivideClosed.hxx>
 
 constexpr std::array type_names = {
   "GeomAbs_Plane",
@@ -31,6 +36,15 @@ constexpr std::array type_names = {
   "GeomAbs_SurfaceOfExtrusion",
   "GeomAbs_OffsetSurface",
   "GeomAbs_OtherSurface"
+};
+
+class MyProgressIndicator : public Message_ProgressIndicator {
+public:
+    MyProgressIndicator() {}
+protected:
+    virtual void Show(const Message_ProgressScope& theScope, 
+                     const Standard_Boolean isForce) override {
+    }
 };
 
 void output_nurbs(Geom_BSplineSurface *bspline, std::ofstream &fout) {
@@ -109,10 +123,20 @@ void output_rbezier(Geom_BezierSurface *bezier, std::ofstream &fout)
   fout << std::endl;
 }
 
+void progress_bar(Message_ProgressIndicator &indicator, std::string message) {
+  while((1.0 - indicator.GetPosition()) > 1e-4) {
+    std::cout << std::format("\r{} {:10.5}%", message, indicator.GetPosition()*100) << std::flush;
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  std::cout << "\r" << message << " Done.                 " << std::endl;
+}
+
 void transfer_all_shapes(STEPControl_Reader &reader, std::ofstream &fout) {
-  std::cout << "Transferring roots..." << std::flush;
-  reader.TransferRoots();
-  std::cout << "Done." << std::endl;
+  MyProgressIndicator indicator;
+  Message_ProgressRange range = indicator.Start();
+  std::thread progress_th(progress_bar, std::reference_wrapper(indicator), "Transferring Roots...");
+  reader.TransferRoots(range);
+  progress_th.join(); 
 
   auto shapes_for_transfer = reader.NbShapes();
   std::array<int, type_names.size()> type_counts = {};
@@ -121,6 +145,10 @@ void transfer_all_shapes(STEPControl_Reader &reader, std::ofstream &fout) {
   for (int i = 1; i <= shapes_for_transfer; ++i) {
     std::cout << std::format("Transferring shape {}/{}...", i, shapes_for_transfer) << std::endl;
     auto shape = reader.Shape(i);
+    ShapeUpgrade_ShapeDivideClosed divider(shape);
+    divider.Perform();
+    shape = divider.Result();
+    
     TopExp_Explorer ex;
     for (ex.Init(shape, TopAbs_FACE); ex.More(); ex.Next()) {
       std::cout << "Output " << count++ << " surface(Type: ";
@@ -151,8 +179,11 @@ void transfer_all_shapes(STEPControl_Reader &reader, std::ofstream &fout) {
           output_nurbs(bspline, fout);
         } catch(Standard_Failure &theExec) {
           std::cout << "Failed. Skip." << std::endl;
-          std::cerr << "\t" << theExec << std::endl;
-          fails.push_back(std::to_string(count)+": "+theExec.GetMessageString());
+          auto message  = std::to_string(count)
+                        + "(" + type_names[type] + "): "
+                        + theExec.GetMessageString();
+          std::cerr << "\t" << message << std::endl;
+          fails.push_back(message);
           std::string aName = std::string("face") + std::to_string(count) + std::string(".brep");
           BRepTools::Write(face, aName.c_str());
           continue;
