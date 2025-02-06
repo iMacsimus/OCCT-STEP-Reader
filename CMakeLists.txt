@@ -59,3 +59,5 @@ target_include_directories(occd_lib PUBLIC ${PROJECT_SOURCE_DIR}/external/OCCT/l
 add_executable(${PROJECT_NAME} src/main.cpp)
 target_link_libraries(${PROJECT_NAME} occd_lib)
 
+add_executable(NURBSS2STEP src/tostep.cpp)
+
