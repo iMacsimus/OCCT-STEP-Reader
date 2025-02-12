@@ -56,6 +56,11 @@ add_library(occd_lib STATIC src/dummy.cpp)
 target_link_libraries(occd_lib ${OCCT_LIBS})
 target_include_directories(occd_lib PUBLIC ${PROJECT_SOURCE_DIR}/external/OCCT/linux/include/)
 
-add_executable(${PROJECT_NAME} src/main.cpp)
+add_executable(
+  ${PROJECT_NAME} 
+    src/main.cpp 
+    src/tesselation.cpp
+    src/convertion2nurbss.cpp
+    src/command_line_arguments.cpp)
 target_link_libraries(${PROJECT_NAME} occd_lib)
 
