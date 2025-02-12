@@ -5,6 +5,8 @@
 #include <array>
 #include <chrono>
 #include <thread>
+#include <filesystem>
+#include <ranges>
 
 #include <STEPControl_Reader.hxx>
 #include <TopExp_Explorer.hxx>
@@ -15,14 +17,14 @@
 #include <BRepAdaptor_Surface.hxx>
 #include <Geom_BSplineSurface.hxx>
 #include <Geom_BezierSurface.hxx>
-#include <Poly_Triangulation.hxx>
-#include <GeomConvert.hxx>
-#include <Geom_Surface.hxx>
 #include <BRepBuilderAPI_NurbsConvert.hxx>
 #include <OSD.hxx>
 #include <Message_ProgressIndicator.hxx>
 #include <Message_ProgressRange.hxx>
 #include <ShapeUpgrade_ShapeDivideClosed.hxx>
+#include <BRep_Builder.hxx>
+
+using std::ranges::views::iota;
 
 constexpr std::array type_names = {
   "GeomAbs_Plane",
@@ -47,7 +49,7 @@ protected:
     }
 };
 
-void output_nurbs(Geom_BSplineSurface *bspline, std::ofstream &fout) {
+void output_nurbs(Geom_BSplineSurface *bspline, std::ostream &fout) {
   if (bspline->IsUPeriodic()) {
     bspline->SetUNotPeriodic();
   }
@@ -87,7 +89,7 @@ void output_nurbs(Geom_BSplineSurface *bspline, std::ofstream &fout) {
   fout << std::endl;
 }
 
-void output_rbezier(Geom_BezierSurface *bezier, std::ofstream &fout)
+void output_rbezier(Geom_BezierSurface *bezier, std::ostream &fout)
 {
   fout << std::format("n = {}\nm = {}\n", bezier->NbUPoles()-1, bezier->NbVPoles()-1);
   fout << "points:" << std::endl;
@@ -131,89 +133,139 @@ void progress_bar(Message_ProgressIndicator &indicator, std::string message) {
   std::cout << "\r" << message << " Done.                 " << std::endl;
 }
 
-void transfer_all_shapes(STEPControl_Reader &reader, std::ofstream &fout) {
-  MyProgressIndicator indicator;
-  Message_ProgressRange range = indicator.Start();
-  std::thread progress_th(progress_bar, std::reference_wrapper(indicator), "Transferring Roots...");
-  reader.TransferRoots(range);
-  progress_th.join(); 
+class ShapeWriter
+{
+public:
+  ShapeWriter() = default;
+public:
+  void process(TopoDS_Shape shape, std::ostream &fout);
+  int faces_count() const { return count_; }
+  int faces_count(int type_id) const { return type_counts_[type_id]; }
+  const std::vector<std::string> &fails() const { return fails_; }
+private:
+  int count_ = 0;
+  std::array<int, type_names.size()> type_counts_ = {};
+  std::vector<std::string> fails_ = {};
+};
 
-  auto shapes_for_transfer = reader.NbShapes();
-  std::array<int, type_names.size()> type_counts = {};
-  int count = 0;
-  std::vector<std::string> fails = {};
-  for (int i = 1; i <= shapes_for_transfer; ++i) {
-    std::cout << std::format("Transferring shape {}/{}...", i, shapes_for_transfer) << std::endl;
-    auto shape = reader.Shape(i);
-    ShapeUpgrade_ShapeDivideClosed divider(shape);
-    divider.Perform();
-    shape = divider.Result();
+void ShapeWriter::process(TopoDS_Shape shape, std::ostream &fout) {
+  ShapeUpgrade_ShapeDivideClosed divider(shape);
+  divider.Perform();
+  shape = divider.Result();
+
+  TopExp_Explorer ex;
+  for (ex.Init(shape, TopAbs_FACE); ex.More(); ex.Next()) {
+    std::cout << "Output " << count_++ << " surface(Type: ";
+    TopoDS_Face face = TopoDS::Face(ex.Current());
+    BRepAdaptor_Surface surface(face);
+    auto type = surface.GetType();
+    std::cout << type_names[type] << ")..." << std::flush;
+    ++type_counts_[type];
     
-    TopExp_Explorer ex;
-    for (ex.Init(shape, TopAbs_FACE); ex.More(); ex.Next()) {
-      std::cout << "Output " << count++ << " surface(Type: ";
-      TopoDS_Face face = TopoDS::Face(ex.Current());
-      BRepAdaptor_Surface surface(face);
-      auto type = surface.GetType();
-      std::cout << type_names[type] << ")..." << std::flush;
-      ++type_counts[type];
-      
-      if (type == GeomAbs_BSplineSurface) {
+    if (type == GeomAbs_BSplineSurface) {
+      auto bspline_handler = surface.BSpline();
+      auto bspline = bspline_handler.get();
+      output_nurbs(bspline, fout);
+    } else if (type == GeomAbs_BezierSurface) {
+      auto bezier_handler = surface.Bezier();
+      auto bezier = bezier_handler.get();
+      output_rbezier(bezier, fout);
+    } else {
+      std::cout << "Converting to Bspline..." << std::flush;
+      try {
+        OCC_CATCH_SIGNALS
+
+        BRepBuilderAPI_NurbsConvert convertor(face);
+        face = TopoDS::Face(convertor.Shape());
+        surface = face;
         auto bspline_handler = surface.BSpline();
         auto bspline = bspline_handler.get();
         output_nurbs(bspline, fout);
-      } else if (type == GeomAbs_BezierSurface) {
-        auto bezier_handler = surface.Bezier();
-        auto bezier = bezier_handler.get();
-        output_rbezier(bezier, fout);
-      } else {
-        std::cout << "Converting to Bspline..." << std::flush;
-        try {
-          OCC_CATCH_SIGNALS
-
-          BRepBuilderAPI_NurbsConvert convertor(face);
-          face = TopoDS::Face(convertor.Shape());
-          surface = face;
-          auto bspline_handler = surface.BSpline();
-          auto bspline = bspline_handler.get();
-          output_nurbs(bspline, fout);
-        } catch(Standard_Failure &theExec) {
-          std::cout << "Failed. Skip." << std::endl;
-          auto message  = std::to_string(count)
-                        + "(" + type_names[type] + "): "
-                        + theExec.GetMessageString();
-          std::cerr << "\t" << message << std::endl;
-          fails.push_back(message);
-          std::string aName = std::string("face") + std::to_string(count) + std::string(".brep");
-          BRepTools::Write(face, aName.c_str());
-          continue;
-        }
-        
+      } catch(Standard_Failure &theExec) {
+        std::cout << "Failed. Skip." << std::endl;
+        auto message  = std::to_string(count_)
+                      + "(" + type_names[type] + "): "
+                      + theExec.GetMessageString();
+        std::cerr << "\t" << message << std::endl;
+        fails_.push_back(message);
+        std::string aName = std::string("face") + std::to_string(count_) + std::string(".brep");
+        BRepTools::Write(face, aName.c_str());
+        continue;
       }
-      std::cout << "Done." << std::endl;
+      
     }
+    std::cout << "Done." << std::endl;
   }
-  std::cout << "-------------" << std::endl;
-  std::cout << "Stats:" << std::endl;
-  for (int i = 0; i < type_names.size(); ++i) {
-    std::cout << type_names[i] << ": " << type_counts[i] << std::endl;
+}
+
+void write_stats(
+    const ShapeWriter &writer,
+    std::ostream &out) {
+  out << "Stats:" << std::endl;
+  for (auto id: iota(0ull, type_names.size())) {
+    out << type_names[id] << " " << writer.faces_count(id) << std::endl;
   }
-  std::cout << "-------------" << std::endl;
-  std::cout << "Fails: " << fails.size() << std::endl;
-  for (auto &fail: fails) {
-    std::cout << fail << std::endl;
+}
+
+void write_fails(
+    const ShapeWriter &writer,
+    std::ostream &out) {
+  out << "Fails: " << writer.fails().size() << std::endl;
+  for (auto &fail: writer.fails()) {
+    out << fail << std::endl;
   }
-  std::cout << "All failed faces were dumped to .brep files" << std::endl;
+  out << "All failed faces were dumbed to .brep files" << std::endl;
 }
 
 int main(int argc, const char **argv) {
   OSD::SetSignal(false);
-  STEPControl_Reader reader;
-  IFSelect_ReturnStatus stat = reader.ReadFile(argv[1]);
-  reader.PrintCheckLoad(true, IFSelect_PrintCount::IFSelect_ListByItem);
 
+  std::filesystem::path model_path = argv[1];
+  std::filesystem::path result_file_path = argv[2];
+  result_file_path.replace_extension(".nurbss");
+
+  ShapeWriter writer;
   std::ofstream fout(std::string(argv[2])+".nurbss");
-  transfer_all_shapes(reader, fout);
-  
+
+  MyProgressIndicator indicator;
+  Message_ProgressRange range = indicator.Start();
+
+  if (model_path.extension() == ".step"
+      || model_path.extension() == ".stp") {
+    STEPControl_Reader reader;
+    IFSelect_ReturnStatus stat = reader.ReadFile(model_path.c_str());
+    reader.PrintCheckLoad(true, IFSelect_PrintCount::IFSelect_ListByItem);
+    
+    std::thread progress_th(progress_bar, std::reference_wrapper(indicator), "Transferring Roots...");
+    reader.TransferRoots(range);
+    progress_th.join(); 
+
+    auto shapes_for_transfer = reader.NbShapes();
+    for (int i = 1; i <= shapes_for_transfer; ++i) {
+      std::cout << std::format("Transferring shape {}/{}...", i, shapes_for_transfer) << std::endl;
+      auto shape = reader.Shape(i);
+      writer.process(std::move(shape), fout);
+    }
+  } else if (model_path.extension() == ".brep") {
+    BRep_Builder builder;
+    TopoDS_Shape shape;
+
+    std::thread progress_th(progress_bar, std::reference_wrapper(indicator), "Reading .brep file...");
+    BRepTools::Read(shape, model_path.c_str(), builder, range);
+    progress_th.join();
+
+    writer.process(shape, fout);
+  } else {
+    throw std::invalid_argument(
+        std::string("Incorrect format (")
+      + model_path.extension().string()
+      + "). Must be one of { .step, .stp, .brep }");
+  }
+
+  std::ofstream fstats("stats.txt"), ffails("fails.txt");
+  write_stats(writer, std::cout);
+  write_stats(writer, fstats);
+  write_fails(writer, std::cout);
+  write_fails(writer, ffails);
   return 0;
 }
