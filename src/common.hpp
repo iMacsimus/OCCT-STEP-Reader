@@ -4,7 +4,11 @@
 #include <thread>
 #include <format>
 #include <ranges>
+#include <type_traits>
+
 namespace rv = std::ranges::views;
+template<typename T>
+using OptionalReference = std::optional<std::reference_wrapper<T>>;
 
 #include "occt_headers.hpp"
 
@@ -33,6 +37,42 @@ void progress_bar(Message_ProgressIndicator &indicator, std::string message) {
 }
 
 template<typename... Ts>
-void println(Ts... args) {
-  std::cout << std::format(args...) << std::endl;
+void println(std::format_string<Ts...> fstring, Ts&&... args) {
+  std::cout << std::format(fstring, args...) << std::endl;
 }
+
+template<typename... Ts>
+void print(std::format_string<Ts...> fstring, Ts&&... args) {
+  std::cout << std::format(fstring, args...) << std::flush;
+}
+
+constexpr std::array geom_abs2str = {
+  "GeomAbs_Plane",
+  "GeomAbs_Cylinder",
+  "GeomAbs_Cone",
+  "GeomAbs_Sphere",
+  "GeomAbs_Torus",
+  "GeomAbs_BezierSurface",
+  "GeomAbs_BSplineSurface",
+  "GeomAbs_SurfaceOfRevolution",
+  "GeomAbs_SurfaceOfExtrusion",
+  "GeomAbs_OffsetSurface",
+  "GeomAbs_OtherSurface"
+};
+
+struct Statistics
+{
+  int faces_count;
+  std::array<int, geom_abs2str.size()> face_type_counts;
+  std::vector<std::string> fails;
+  std::vector<std::pair<std::string, TopoDS_Face>> failed_faces;
+};
+
+void tesselate_solid(const TopoDS_Solid& shape, std::filesystem::path save_path);
+void convert2nurbs(
+      int shape_id,
+      TopoDS_Shape shape, 
+      std::optional<std::filesystem::path> nurbs_out,
+      std::optional<Statistics> &stats,
+      std::optional<TopoDS_Shape> &conv_shape,
+      std::optional<TopoDS_Shape> &conv_shape_notrim);

@@ -7,7 +7,9 @@ std::map<std::string, bool> is_required = {
   { "--save_dir", true },
   { "--brep_no_trim", false },
   { "--brep", false },
-  { "-log_fails", false },
+  { "--log_fails", false },
+  { "--no_nurbs", false },
+  { "--no_stl", false }
 };
 
 const char help_message_cstr[] = 
@@ -16,7 +18,7 @@ R"(OCCT STEP Reader
 Reads and parses STEP or .brep files, tesselates solid 
 watertight parts and export as .stl file, specific for
 each solid. Also, converts all faces to bspline surfaces
-and exports as .nurbss (poprietary LiteRT format) file,
+and exports as .nurbs (poprietary LiteRT format) file,
 specific for each solid.
 ------------------------------------------------------------
 !!! Required Arguments:
@@ -25,6 +27,8 @@ specific for each solid.
 * --save_dir <path> - directory to save output files;
 ------------------------------------------------------------
 Optional:
+* --no_nurbs: disable .nurbs files generation
+* --no_stl: disable .stl files generation
 * --brep_no_trim: additionally save .brep file after
 convertation of all faces to bspline surface,
 except trimming curves;
@@ -65,7 +69,9 @@ void get_cl_args(
     { "--save_dir", false },
     { "--brep_no_trim", false },
     { "--brep", false },
-    { "-log_fails", false },
+    { "--log_fails", false },
+    { "--no_nurbs", false },
+    { "--no_stl", false }
   };
 
   for (int i = 1; i < argc; ++i) {

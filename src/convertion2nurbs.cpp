@@ -4,21 +4,7 @@
 using std::ranges::views::iota;
 
 
-#include "occt_headers.hpp"
-
-constexpr std::array type_names = {
-  "GeomAbs_Plane",
-  "GeomAbs_Cylinder",
-  "GeomAbs_Cone",
-  "GeomAbs_Sphere",
-  "GeomAbs_Torus",
-  "GeomAbs_BezierSurface",
-  "GeomAbs_BSplineSurface",
-  "GeomAbs_SurfaceOfRevolution",
-  "GeomAbs_SurfaceOfExtrusion",
-  "GeomAbs_OffsetSurface",
-  "GeomAbs_OtherSurface"
-};
+#include "common.hpp"
 
 void output_nurbs(Geom_BSplineSurface *bspline, std::ostream &fout) {
   if (bspline->IsUPeriodic()) {
@@ -96,45 +82,62 @@ void output_rbezier(Geom_BezierSurface *bezier, std::ostream &fout)
   fout << std::endl;
 }
 
-class ShapeWriter
-{
-public:
-  ShapeWriter() = default;
-public:
-  void process(TopoDS_Shape shape, std::ostream &fout);
-  int faces_count() const { return count_; }
-  int faces_count(int type_id) const { return type_counts_[type_id]; }
-  const std::vector<std::string> &fails() const { return fails_; }
-private:
-  int count_ = 0;
-  std::array<int, type_names.size()> type_counts_ = {};
-  std::vector<std::string> fails_ = {};
-};
-
-void ShapeWriter::process(TopoDS_Shape shape, std::ostream &fout) {
+void convert2nurbs(
+      int shape_id,
+      TopoDS_Shape shape, 
+      std::optional<std::filesystem::path> nurbs_out,
+      std::optional<Statistics> &stats,
+      std::optional<TopoDS_Shape> &conv_shape,
+      std::optional<TopoDS_Shape> &conv_shape_notrim) {
+  std::cout << "Divide Closed...";
   ShapeUpgrade_ShapeDivideClosed divider(shape);
   divider.Perform();
   shape = divider.Result();
+  println("Done.");
 
-  TopExp_Explorer ex;
-  for (ex.Init(shape, TopAbs_FACE); ex.More(); ex.Next()) {
-    std::cout << "Output " << count_++ << " surface(Type: ";
+  std::optional<std::ofstream> fout = (nurbs_out) 
+                                      ? std::ofstream(nurbs_out.value()) 
+                                      : std::optional<std::ofstream>{};
+
+  int count = 0;
+  std::vector<std::string> fails;
+  std::vector<std::pair<std::string, TopoDS_Face>> failed_faces;
+  std::array<int, geom_abs2str.size()> face_type_counts = {};
+
+  for (TopExp_Explorer ex(shape, TopAbs_FACE); ex.More(); ex.Next()) {
     TopoDS_Face face = TopoDS::Face(ex.Current());
     BRepAdaptor_Surface surface(face);
     auto type = surface.GetType();
-    std::cout << type_names[type] << ")..." << std::flush;
-    ++type_counts_[type];
-    
+    ++face_type_counts[type];
+
+    print("Output {} face({})...", count, geom_abs2str[type]);
+    ++count;
     if (type == GeomAbs_BSplineSurface) {
       auto bspline_handler = surface.BSpline();
       auto bspline = bspline_handler.get();
-      output_nurbs(bspline, fout);
+      if (nurbs_out) {
+        output_nurbs(bspline, fout.value());
+      }
+      if (conv_shape) {
+        //TODO
+      }
+      if (conv_shape_notrim) {
+        //TODO
+      }
     } else if (type == GeomAbs_BezierSurface) {
       auto bezier_handler = surface.Bezier();
       auto bezier = bezier_handler.get();
-      output_rbezier(bezier, fout);
+      if (nurbs_out) {
+        output_rbezier(bezier, fout.value());
+      }
+      if (conv_shape) {
+        //TODO
+      }
+      if (conv_shape_notrim) {
+        //TODO
+      }
     } else {
-      std::cout << "Converting to Bspline..." << std::flush;
+      print("Converting to Bspline...");
       try {
         OCC_CATCH_SIGNALS
 
@@ -143,42 +146,37 @@ void ShapeWriter::process(TopoDS_Shape shape, std::ostream &fout) {
         surface = face;
         auto bspline_handler = surface.BSpline();
         auto bspline = bspline_handler.get();
-        output_nurbs(bspline, fout);
+        if (nurbs_out) {
+          output_nurbs(bspline, fout.value());
+        }
+        if (conv_shape) {
+          //TODO
+        }
+        if (conv_shape_notrim) {
+          //TODO
+        }
       } catch(Standard_Failure &theExec) {
         std::cout << "Failed. Skip." << std::endl;
-        auto message  = std::to_string(count_)
-                      + "(" + type_names[type] + "): "
+        auto message  = std::to_string(count)
+                      + "(" + geom_abs2str[type] + "): "
                       + theExec.GetMessageString();
         std::cerr << "\t" << message << std::endl;
-        fails_.push_back(message);
-        std::string aName = std::string("face") + std::to_string(count_) + std::string(".brep");
-        BRepTools::Write(face, aName.c_str());
+        fails.push_back(message);
+        std::string aName = std::format("face_{}_{}.brep", shape_id, count-1);
+        failed_faces.push_back({ aName, face });
         continue;
       }
-      
     }
-    std::cout << "Done." << std::endl;
-    std::string aName = std::string("face") + std::to_string(count_) + std::string(".brep");
-    BRepTools::Write(face, aName.c_str());
-    getchar();
+    println("Done.");
   }
-}
 
-void write_stats(
-    const ShapeWriter &writer,
-    std::ostream &out) {
-  out << "Stats:" << std::endl;
-  for (auto id: iota(0ull, type_names.size())) {
-    out << type_names[id] << " " << writer.faces_count(id) << std::endl;
+  if (stats) {
+    auto &stats_ref = stats.value();
+    stats_ref.faces_count += count;
+    for (auto i: rv::iota(0ull, stats_ref.face_type_counts.size())) {
+      stats_ref.face_type_counts[i] += face_type_counts[i];
+    }
+    std::copy(fails.begin(), fails.end(), std::back_inserter(stats_ref.fails));
+    std::copy(failed_faces.begin(), failed_faces.end(), std::back_inserter(stats_ref.failed_faces));
   }
-}
-
-void write_fails(
-    const ShapeWriter &writer,
-    std::ostream &out) {
-  out << "Fails: " << writer.fails().size() << std::endl;
-  for (auto &fail: writer.fails()) {
-    out << fail << std::endl;
-  }
-  out << "All failed faces were dumbed to .brep files" << std::endl;
 }

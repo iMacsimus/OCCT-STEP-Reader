@@ -60,7 +60,7 @@ add_executable(
   ${PROJECT_NAME} 
     src/main.cpp 
     src/tesselation.cpp
-    src/convertion2nurbss.cpp
+    src/convertion2nurbs.cpp
     src/command_line_arguments.cpp)
 target_link_libraries(${PROJECT_NAME} occd_lib)
 

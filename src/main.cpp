@@ -6,17 +6,31 @@
 #include <chrono>
 #include <thread>
 #include <filesystem>
-
 #include <vector>
 #include <iostream>
 #include <map>
-namespace rv = std::ranges::views;
+#include <optional>
 
 #include "common.hpp"
 
 void process_solid(
-    TopoDS_Solid solid) {
-  //TODO
+    int shape_id,
+    const TopoDS_Solid &solid,
+    std::optional<std::filesystem::path> nurbs_out,
+    std::optional<std::filesystem::path> stl_out,
+    std::optional<Statistics>& stats,
+    std::optional<TopoDS_Shape>& conv_shape,
+    std::optional<TopoDS_Shape>& conv_shape_notrim) {
+  if (stl_out) {
+    std::cout << "Tesselate Solid....";
+    auto save_path = stl_out.value();
+    tesselate_solid(solid, save_path);
+    std::cout << "Done.";
+  }
+  if (nurbs_out || conv_shape || conv_shape_notrim) {
+    std::cout << "Converting all faces..." << std::endl;
+    convert2nurbs(shape_id, solid, nurbs_out, stats, conv_shape, conv_shape_notrim);
+  }
 }
 
 int main(int argc, const char **argv) {
@@ -32,42 +46,84 @@ int main(int argc, const char **argv) {
     return 0;
   }
 
-  MyProgressIndicator indicator;
-  Message_ProgressRange range = indicator.Start();
+  std::optional<Statistics> stats;
+  std::optional<std::filesystem::path> nurbs_path, stl_path;
+  std::optional<TopoDS_Shape> conv_shape, conv_shape_no_trim;
+  if (is_specified["--log_fails"]) {
+    stats = Statistics{};
+  }
 
   if (file_path.extension() == ".step"
       || file_path.extension() == ".stp") {
     STEPControl_Reader reader;
     IFSelect_ReturnStatus stat = reader.ReadFile(file_path.c_str());
     reader.PrintCheckLoad(true, IFSelect_PrintCount::IFSelect_ListByItem);
-    
+
+    MyProgressIndicator indicator;
+    Message_ProgressRange range = indicator.Start();
     std::thread progress_th(progress_bar, std::reference_wrapper(indicator), "Transferring roots from step...");
     reader.TransferRoots(range);
     progress_th.join(); 
 
     auto shapes_for_transfer = reader.NbShapes();
-    for (int i: rv::iota(1, shapes_for_transfer)) {
+    int solid_id = 0;
+    for (int i: rv::iota(1, shapes_for_transfer+1)) {
       auto full_shape = reader.Shape(i);
       for (TopExp_Explorer ex(full_shape, TopAbs_SOLID); ex.More(); ex.Next()) {
-        process_solid(TopoDS::Solid(ex.Current()));
+        if (!is_specified["--no_nurbs"]) {
+          nurbs_path = save_dir / (std::to_string(solid_id) + ".nurbs");
+        }
+        if (!is_specified["--no_stl"]) {
+          stl_path = save_dir / (std::to_string(solid_id) + ".stl");
+        }
+        process_solid(solid_id, TopoDS::Solid(ex.Current()), nurbs_path, stl_path, stats, conv_shape, conv_shape_no_trim);
+        ++solid_id;
       }
     }
   } else if (file_path.extension() == ".brep") {
     BRep_Builder builder;
     TopoDS_Shape shape;
 
+    MyProgressIndicator indicator;
+    Message_ProgressRange range = indicator.Start();
     std::thread progress_th(progress_bar, std::reference_wrapper(indicator), "Reading .brep file...");
     BRepTools::Read(shape, file_path.c_str(), builder, range);
     progress_th.join();
 
+    int solid_id = 0;
     for (TopExp_Explorer ex(shape, TopAbs_SOLID); ex.More(); ex.Next()) {
-      process_solid(TopoDS::Solid(ex.Current()));
+      if (!is_specified["--no_nurbs"]) {
+          nurbs_path = save_dir / (std::to_string(solid_id) + ".nurbs");
+      }
+      if (!is_specified["--no_stl"]) {
+        stl_path = save_dir / (std::to_string(solid_id) + ".stl");
+      }
+      process_solid(solid_id, TopoDS::Solid(ex.Current()), nurbs_path, stl_path, stats, conv_shape, conv_shape_no_trim);
+      ++solid_id;
     }
   } else {
     throw std::invalid_argument(
         std::string("Incorrect format (")
       + file_path.extension().string()
       + "). Must be one of { .step, .stp, .brep }");
+  }
+
+  if (is_specified["--log_fails"]) {
+    std::filesystem::create_directories(save_dir / "Fails");
+    auto &stats_ref = stats.value();
+    for (auto &[name, face]: stats_ref.failed_faces) {
+      BRepTools::Write(face, name.c_str());
+    }
+    std::ofstream fstats(save_dir / "Fails" / "stats.txt");
+    fstats << "Stats:" << std::endl;
+    for (auto i: rv::iota(0ull, stats_ref.face_type_counts.size())) {
+      fstats << geom_abs2str[i] << ": " << stats_ref.face_type_counts[i] << std::endl;
+    }
+    std::ofstream ffails(save_dir / "Fails" / "fails.txt");
+    ffails << "Fails: " << stats_ref.fails.size() << std::endl;
+    for (auto &fail: stats_ref.fails) {
+      ffails << fail << std::endl;
+    }
   }
 
   return 0;
