@@ -89,10 +89,11 @@ void get_cl_args(
       ++i;
     }
   }
-
-  for (auto &[arg, is_req]: is_required) {
-    if (is_req && !is_specified[arg]) {
-      throw std::invalid_argument(arg+" is not specified");
+  if (!is_specified["--help"] && !is_specified["-h"]) {
+    for (auto &[arg, is_req]: is_required) {
+      if (is_req && !is_specified[arg]) {
+        throw std::invalid_argument(arg+" is not specified");
+      }
     }
   }
 }
