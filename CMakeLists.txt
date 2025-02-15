@@ -52,10 +52,7 @@ set(OCCT_LIBS
   TKXSBase
 )
 link_directories(external/OCCT/linux/lib)
-
-add_library(occd_lib STATIC src/dummy.cpp)
-target_link_libraries(occd_lib ${OCCT_LIBS})
-target_include_directories(occd_lib PUBLIC ${PROJECT_SOURCE_DIR}/external/OCCT/linux/include/)
+file(GLOB OCCT_LIB_FILES "external/OCCT/linux/lib/*.so*")
 
 add_executable(
   ${PROJECT_NAME} 
@@ -63,5 +60,15 @@ add_executable(
     src/tesselation.cpp
     src/convertion2nurbs.cpp
     src/command_line_arguments.cpp)
-target_link_libraries(${PROJECT_NAME} occd_lib)
+target_link_libraries(${PROJECT_NAME} ${OCCT_LIBS})
+target_include_directories(${PROJECT_NAME} PUBLIC external/OCCT/linux/include)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    ${OCCT_LIB_FILES}
+    $<TARGET_FILE_DIR:${PROJECT_NAME}>)
+set_target_properties(${PROJECT_NAME} PROPERTIES 
+  BUILD_WITH_INSTALL_RPATH TRUE
+  INSTALL_RPATH "$ORIGIN")
+
+
 
