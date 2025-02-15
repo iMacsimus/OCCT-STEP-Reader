@@ -76,7 +76,7 @@ void get_cl_args(
 
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
-    if (!is_specified.contains(arg)) {
+    if (is_specified.find(arg) == is_specified.end()) {
       throw std::invalid_argument(std::string("invalid argument: ")+arg);
     }
     is_specified[arg] = true;

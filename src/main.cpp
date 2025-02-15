@@ -1,7 +1,6 @@
 #include <iostream>
 #include <cassert>
 #include <fstream>
-#include <format>
 #include <array>
 #include <chrono>
 #include <thread>
@@ -67,7 +66,7 @@ int main(int argc, const char **argv) {
 
     auto shapes_for_transfer = reader.NbShapes();
     int solid_id = 0;
-    for (int i: rv::iota(1, shapes_for_transfer+1)) {
+    for (int i = 1; i <= shapes_for_transfer; ++i) {
       auto full_shape = reader.Shape(i);
       for (TopExp_Explorer ex(full_shape, TopAbs_SOLID); ex.More(); ex.Next()) {
         if (!is_specified["--no_nurbs"]) {
@@ -116,7 +115,7 @@ int main(int argc, const char **argv) {
     }
     std::ofstream fstats(save_dir / "Fails" / "stats.txt");
     fstats << "Stats:" << std::endl;
-    for (auto i: rv::iota(0ull, stats_ref.face_type_counts.size())) {
+    for (int i = 0; i < stats_ref.face_type_counts.size(); ++i) {
       fstats << geom_abs2str[i] << ": " << stats_ref.face_type_counts[i] << std::endl;
     }
     std::ofstream ffails(save_dir / "Fails" / "fails.txt");

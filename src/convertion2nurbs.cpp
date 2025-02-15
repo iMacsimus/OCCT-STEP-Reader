@@ -1,8 +1,4 @@
 #include <thread>
-#include <ranges>
-#include <format>
-using std::ranges::views::iota;
-
 
 #include "common.hpp"
 
@@ -13,10 +9,11 @@ void output_nurbs(Geom_BSplineSurface *bspline, std::ostream &fout) {
   if (bspline->IsVPeriodic()) {
     bspline->SetVNotPeriodic();
   }
-  fout << std::format("n = {}\nm = {}\n", bspline->NbUPoles()-1, bspline->NbVPoles()-1);
+  fout << "n = " << bspline->NbUPoles()-1 << std::endl;
+  fout << "m = " << bspline->NbVPoles()-1 << std::endl;
   fout << "points:" << std::endl;
   for (auto &point: bspline->Poles()) {
-    fout << std::format("{{{}, {}, {}}} ", point.X(), point.Y(), point.Z());
+    fout << "{" << point.X() << ", " << point.Y() << ", " << point.Z() << "} ";
   }
   fout << std::endl;
   fout << "weights:" << std::endl;
@@ -31,9 +28,10 @@ void output_nurbs(Geom_BSplineSurface *bspline, std::ostream &fout) {
       fout << 1.0f << " ";
     }
   }
-  
   fout << std::endl;
-  fout << std::format("u_degree: {}\nv_degree: {}\n", bspline->UDegree(), bspline->VDegree());
+
+  fout << "u_degree: " << bspline->UDegree() << std::endl;
+  fout << "v_degree: " << bspline->VDegree() << std::endl;
   fout << "u_knots: ";
   for (auto &knot: bspline->UKnotSequence()) {
     fout << knot << " ";
@@ -48,10 +46,11 @@ void output_nurbs(Geom_BSplineSurface *bspline, std::ostream &fout) {
 
 void output_rbezier(Geom_BezierSurface *bezier, std::ostream &fout)
 {
-  fout << std::format("n = {}\nm = {}\n", bezier->NbUPoles()-1, bezier->NbVPoles()-1);
+  fout << "n = " << bezier->NbUPoles()-1 << std::endl;
+  fout << "m = " << bezier->NbVPoles()-1 << std::endl;
   fout << "points:" << std::endl;
   for (auto &point: bezier->Poles()) {
-    fout << std::format("{{{}, {}, {}}} ", point.X(), point.Y(), point.Z());
+    fout << "{" << point.X() << ", " << point.Y() << ", " << point.Z() << "} ";
   }
   fout << std::endl;
   fout << "weights:" << std::endl;
@@ -67,7 +66,8 @@ void output_rbezier(Geom_BezierSurface *bezier, std::ostream &fout)
     }
   }
   fout << std::endl;
-  fout << std::format("u_degree: {}\nv_degree: {}\n", bezier->UDegree(), bezier->VDegree());
+  fout << "u_degree: " << bezier->UDegree() << std::endl;
+  fout << "v_degree: " << bezier->VDegree() << std::endl;
   fout << "u_knots: ";
   Standard_Real umin, umax, vmin, vmax;
   bezier->Bounds(umin, umax, vmin, vmax);
@@ -93,7 +93,7 @@ void convert2nurbs(
   ShapeUpgrade_ShapeDivideClosed divider(shape);
   divider.Perform();
   shape = divider.Result();
-  println("Done.");
+  std::cout << "Done." << std::endl;
 
   std::optional<std::ofstream> fout = (nurbs_out) 
                                       ? std::ofstream(nurbs_out.value()) 
@@ -110,7 +110,7 @@ void convert2nurbs(
     auto type = surface.GetType();
     ++face_type_counts[type];
 
-    print("Output {} face({})...", count, geom_abs2str[type]);
+    std::cout << "Output " << count << "face(" << geom_abs2str[type] << ")..." << std::flush;
     ++count;
     if (type == GeomAbs_BSplineSurface) {
       auto bspline_handler = surface.BSpline();
@@ -137,7 +137,7 @@ void convert2nurbs(
         //TODO
       }
     } else {
-      print("Converting to Bspline...");
+      std::cout << "Converting to Bspline..." << std::flush;
       try {
         OCC_CATCH_SIGNALS
 
@@ -162,18 +162,22 @@ void convert2nurbs(
                       + theExec.GetMessageString();
         std::cerr << "\t" << message << std::endl;
         fails.push_back(message);
-        std::string aName = std::format("face_{}_{}.brep", shape_id, count-1);
+        std::string aName = std::string("face_")
+                          + std::to_string(shape_id)
+                          +"_"
+                          +std::to_string(count-1)
+                          +".brep";
         failed_faces.push_back({ aName, face });
         continue;
       }
     }
-    println("Done.");
+    std::cout << "Done." << std::endl;
   }
 
   if (stats) {
     auto &stats_ref = stats.value();
     stats_ref.faces_count += count;
-    for (auto i: rv::iota(0ull, stats_ref.face_type_counts.size())) {
+    for (int i = 0; i < stats_ref.face_type_counts.size(); ++i) {
       stats_ref.face_type_counts[i] += face_type_counts[i];
     }
     std::copy(fails.begin(), fails.end(), std::back_inserter(stats_ref.fails));
