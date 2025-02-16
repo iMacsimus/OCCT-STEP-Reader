@@ -46,6 +46,8 @@ int main(int argc, const char **argv) {
   }
 
   std::filesystem::create_directories(save_dir);
+  auto name = file_path.filename();
+  name.replace_extension("");
 
   std::optional<Statistics> stats;
   std::optional<std::filesystem::path> stl_path;
@@ -55,9 +57,9 @@ int main(int argc, const char **argv) {
     stats = Statistics{};
   }
   if (!is_specified["--no_nurbs"]) {
-    auto name = file_path.filename();
-    name.replace_extension(".nurbs");
-    auto nurbs_path = save_dir / name;
+    auto nurbs_name = name;
+    nurbs_name.replace_extension(".nurbs");
+    auto nurbs_path = save_dir / nurbs_name;
     nurbs_out = std::ofstream(nurbs_path, std::ios::binary);
     nurbs_out.value().write("VERSION 200", 11);
   }
@@ -133,15 +135,15 @@ int main(int argc, const char **argv) {
   }
 
   if (conv_shape) {
-    std::cout << "Writting converted model to .brep..." << std::flush;
-    auto conv_path = save_dir / "converted.brep";
+    std::cout << "Writing converted model to .brep..." << std::flush;
+    auto conv_path = save_dir / (name.string()+"_conv.brep");
     BRepTools::Write(conv_shape.value(), conv_path.c_str());
     std::cout << "Done." << std::endl;
   }
 
   if (conv_shape_no_trim) {
-    std::cout << "Writting untrimmed converted model to .brep..." << std::flush;
-    auto conv_path = save_dir / "converted_no_trim.brep";
+    std::cout << "Writing untrimmed converted model to .brep..." << std::flush;
+    auto conv_path = save_dir / (name.string()+"_conv_notrim.brep");
     BRepTools::Write(conv_shape_no_trim.value(), conv_path.c_str());
     std::cout << "Done." << std::endl;
   }
