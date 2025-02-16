@@ -21,3 +21,4 @@
 #include <StlAPI_Writer.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <gp_Trsf.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>

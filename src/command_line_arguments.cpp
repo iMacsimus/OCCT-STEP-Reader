@@ -47,9 +47,9 @@ without output of any files.
 Output files:
 * <number>.stl, <filename>.nurbs - .stl for <number>-th 
 solid part & .nurbs for the whole model
-* <filename>_notrim.brep (Optional) - output for 
+* converted_notrim.brep (Optional) - output for 
 "--brep_no_trim" argument;
-* <filename>.brep (Optional) - output for "--brep" argument;
+* converted.brep (Optional) - output for "--brep" argument;
 * Fails/<number>.brep (Optional) - dump of <number>-th 
 failed face;
 * Fails/fails.txt (Optional) - error messages for each

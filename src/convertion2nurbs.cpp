@@ -95,9 +95,10 @@ void convert2nurbs(
       TopoDS_Shape shape, 
       std::optional<std::ofstream> &fout,
       std::optional<Statistics> &stats,
-      std::optional<TopoDS_Shape> &conv_shape,
-      std::optional<TopoDS_Shape> &conv_shape_notrim) {
+      std::optional<TopoDS_Compound> &conv_shape,
+      std::optional<TopoDS_Compound> &conv_shape_notrim) {
   std::cout << "Divide Closed Faces...";
+  BRep_Builder builder;
   ShapeUpgrade_ShapeDivideClosed divider(shape);
   divider.Perform();
   shape = divider.Result();
@@ -133,10 +134,14 @@ void convert2nurbs(
         output_nurbs(bspline, fout.value());
       }
       if (conv_shape) {
-        //TODO
+        builder.Add(conv_shape.value(), face);
       }
       if (conv_shape_notrim) {
-        //TODO
+        TopoDS_Wire wr;
+        builder.MakeWire(wr);
+        BRepBuilderAPI_MakeFace facemaker(bspline_handler, wr);
+        auto notrim_face = facemaker.Face();
+        builder.Add(conv_shape_notrim.value(), notrim_face);
       }
     } else if (type == GeomAbs_BezierSurface) {
       auto bezier_handler = surface.Bezier();
@@ -145,10 +150,14 @@ void convert2nurbs(
         output_rbezier(bezier, fout.value());
       }
       if (conv_shape) {
-        //TODO
+        builder.Add(conv_shape.value(), face);
       }
       if (conv_shape_notrim) {
-        //TODO
+        TopoDS_Wire wr;
+        builder.MakeWire(wr);
+        BRepBuilderAPI_MakeFace facemaker(bezier_handler, wr);
+        auto notrim_face = facemaker.Face();
+        builder.Add(conv_shape_notrim.value(), notrim_face);
       }
     } else {
       std::cout << "Converting to Bspline..." << std::flush;
@@ -164,10 +173,14 @@ void convert2nurbs(
           output_nurbs(bspline, fout.value());
         }
         if (conv_shape) {
-          //TODO
+          builder.Add(conv_shape.value(), face);
         }
         if (conv_shape_notrim) {
-          //TODO
+          TopoDS_Wire wr;
+          builder.MakeWire(wr);
+          BRepBuilderAPI_MakeFace facemaker(bspline_handler, wr);
+          auto notrim_face = facemaker.Face();
+          builder.Add(conv_shape_notrim.value(), notrim_face);
         }
       } catch(Standard_Failure &theExec) {
         std::cout << "Failed. Skip." << std::endl;

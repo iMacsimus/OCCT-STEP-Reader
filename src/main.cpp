@@ -18,8 +18,8 @@ void process_solid(
     std::optional<std::ofstream> &nurbs_out,
     std::optional<std::filesystem::path> stl_out,
     std::optional<Statistics>& stats,
-    std::optional<TopoDS_Shape>& conv_shape,
-    std::optional<TopoDS_Shape>& conv_shape_notrim) {
+    std::optional<TopoDS_Compound>& conv_shape,
+    std::optional<TopoDS_Compound>& conv_shape_notrim) {
   if (stl_out) {
     std::cout << "[" << (shape_id+1) << "/" << shapes_total, "] Tesselate....";
     auto save_path = stl_out.value();
@@ -50,7 +50,7 @@ int main(int argc, const char **argv) {
   std::optional<Statistics> stats;
   std::optional<std::filesystem::path> stl_path;
   std::optional<std::ofstream> nurbs_out;
-  std::optional<TopoDS_Shape> conv_shape, conv_shape_no_trim;
+  std::optional<TopoDS_Compound> conv_shape, conv_shape_no_trim;
   if (is_specified["--log_fails"]) {
     stats = Statistics{};
   }
@@ -60,6 +60,16 @@ int main(int argc, const char **argv) {
     auto nurbs_path = save_dir / name;
     nurbs_out = std::ofstream(nurbs_path, std::ios::binary);
     nurbs_out.value().write("VERSION 200", 11);
+  }
+  if (is_specified["--brep"]) {
+    conv_shape = TopoDS_Compound();
+    BRep_Builder builder;
+    builder.MakeCompound(conv_shape.value());
+  }
+  if (is_specified["--brep_no_trim"]) {
+    conv_shape_no_trim = TopoDS_Compound();
+    BRep_Builder builder;
+    builder.MakeCompound(conv_shape_no_trim.value());
   }
 
   if (file_path.extension() == ".step"
@@ -120,6 +130,20 @@ int main(int argc, const char **argv) {
         std::string("Incorrect format (")
       + file_path.extension().string()
       + "). Must be one of { .step, .stp, .brep }");
+  }
+
+  if (conv_shape) {
+    std::cout << "Writting converted model to .brep..." << std::flush;
+    auto conv_path = save_dir / "converted.brep";
+    BRepTools::Write(conv_shape.value(), conv_path.c_str());
+    std::cout << "Done." << std::endl;
+  }
+
+  if (conv_shape_no_trim) {
+    std::cout << "Writting untrimmed converted model to .brep..." << std::flush;
+    auto conv_path = save_dir / "converted_no_trim.brep";
+    BRepTools::Write(conv_shape_no_trim.value(), conv_path.c_str());
+    std::cout << "Done." << std::endl;
   }
 
   if (is_specified["--log_fails"]) {

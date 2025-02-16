@@ -60,5 +60,5 @@ void convert2nurbs(
       TopoDS_Shape shape, 
       std::optional<std::ofstream> &fout,
       std::optional<Statistics> &stats,
-      std::optional<TopoDS_Shape> &conv_shape,
-      std::optional<TopoDS_Shape> &conv_shape_notrim);
+      std::optional<TopoDS_Compound> &conv_shape,
+      std::optional<TopoDS_Compound> &conv_shape_notrim);
