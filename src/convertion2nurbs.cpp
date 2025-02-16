@@ -2,6 +2,11 @@
 
 #include "common.hpp"
 
+template<typename T>
+void binout(std::ostream &fout, const T& value) {
+  fout.write(reinterpret_cast<const char*>(&value), sizeof(T));
+}
+
 void output_nurbs(Geom_BSplineSurface *bspline, std::ostream &fout) {
   if (bspline->IsUPeriodic()) {
     bspline->SetUNotPeriodic();
@@ -9,77 +14,78 @@ void output_nurbs(Geom_BSplineSurface *bspline, std::ostream &fout) {
   if (bspline->IsVPeriodic()) {
     bspline->SetVNotPeriodic();
   }
-  fout << "n = " << bspline->NbUPoles()-1 << std::endl;
-  fout << "m = " << bspline->NbVPoles()-1 << std::endl;
-  fout << "points:" << std::endl;
+
+  int n = bspline->NbUPoles()-1, m = bspline->NbVPoles()-1;
+  binout(fout, n);
+  binout(fout, m);
+
   for (auto &point: bspline->Poles()) {
-    fout << "{" << point.X() << ", " << point.Y() << ", " << point.Z() << "} ";
+    float point_values[4] = { 
+      static_cast<float>(point.X()), 
+      static_cast<float>(point.Y()), 
+      static_cast<float>(point.Z()), 
+      1.0f 
+    };
+    binout(fout, point_values);
   }
-  fout << std::endl;
-  fout << "weights:" << std::endl;
+  
   if (bspline->Weights() != nullptr) {
     for (auto &weight: *bspline->Weights()) {
-      fout << weight << " ";
+      binout(fout, weight);
     }
   } else {
-    for (int i = 0; i < bspline->NbUPoles(); ++i) 
-    for (int j = 0; j < bspline->NbVPoles(); ++j)
-    {
-      fout << 1.0f << " ";
+    for (int i = 0; i < (n+1)*(m+1); ++i) {
+      float weight = 1.0f;
+      binout(fout, weight);
     }
   }
-  fout << std::endl;
 
-  fout << "u_degree: " << bspline->UDegree() << std::endl;
-  fout << "v_degree: " << bspline->VDegree() << std::endl;
-  fout << "u_knots: ";
+  int u_deg = bspline->UDegree(), v_deg = bspline->VDegree();
+  binout(fout, u_deg);
+  binout(fout, v_deg);
   for (auto &knot: bspline->UKnotSequence()) {
-    fout << knot << " ";
+    binout(fout, knot);
   }
-  fout << std::endl;
-  fout << "v_knots: ";
   for (auto &knot: bspline->VKnotSequence()) {
-    fout << knot << " ";
+    binout(fout, knot);
   }
-  fout << std::endl;
 }
 
 void output_rbezier(Geom_BezierSurface *bezier, std::ostream &fout)
 {
-  fout << "n = " << bezier->NbUPoles()-1 << std::endl;
-  fout << "m = " << bezier->NbVPoles()-1 << std::endl;
-  fout << "points:" << std::endl;
+  int n = bezier->NbUPoles()-1, m = bezier->NbVPoles()-1;
+  binout(fout, n);
+  binout(fout, m);
   for (auto &point: bezier->Poles()) {
-    fout << "{" << point.X() << ", " << point.Y() << ", " << point.Z() << "} ";
+    float point_values[4] = { 
+      static_cast<float>(point.X()), 
+      static_cast<float>(point.Y()), 
+      static_cast<float>(point.Z()), 
+      1.0f 
+    };
+    binout(fout, point_values);
   }
-  fout << std::endl;
-  fout << "weights:" << std::endl;
   if (bezier->Weights() != nullptr) {
     for (auto &weight: *bezier->Weights()) {
-      fout << weight << " ";
+      binout(fout, weight);
     }
   } else {
-    for (int i = 0; i < bezier->NbUPoles(); ++i) 
-    for (int j = 0; j < bezier->NbVPoles(); ++j)
-    {
-      fout << 1.0f << " ";
+    for (int i = 0; i < (n+1)*(m+1); ++i) {
+      float weight = 1.0f;
+      binout(fout, weight);
     }
   }
-  fout << std::endl;
-  fout << "u_degree: " << bezier->UDegree() << std::endl;
-  fout << "v_degree: " << bezier->VDegree() << std::endl;
-  fout << "u_knots: ";
+  int u_deg = bezier->UDegree(), v_deg = bezier->VDegree();
+  binout(fout, u_deg);
+  binout(fout, v_deg);
   Standard_Real umin, umax, vmin, vmax;
   bezier->Bounds(umin, umax, vmin, vmax);
   for (int i = 0; i < (bezier->NbUPoles()+bezier->UDegree()+1); ++i) {
-    fout << (i < (bezier->NbUPoles()+bezier->UDegree()+1)/2 ? umin : umax) << " ";
+    binout(fout, (i < (bezier->NbUPoles()+bezier->UDegree()+1)/2 ? umin : umax));
   }
-  fout << std::endl;
-  fout << "v_knots: ";
   for (int i = 0; i < (bezier->NbUPoles()+bezier->UDegree()+1); ++i) {
-    fout << (i < (bezier->NbUPoles()+bezier->UDegree()+1)/2 ? vmin : vmax) << " ";
+    binout(fout, (i < (bezier->NbUPoles()+bezier->UDegree()+1)/2 ? vmin : vmax));
   }
-  fout << std::endl;
 }
 
 void convert2nurbs(
@@ -96,8 +102,13 @@ void convert2nurbs(
   std::cout << "Done." << std::endl;
 
   std::optional<std::ofstream> fout = (nurbs_out) 
-                                      ? std::ofstream(nurbs_out.value()) 
+                                      ? std::ofstream(nurbs_out.value(), std::ios::binary) 
                                       : std::optional<std::ofstream>{};
+  
+  if (fout) {
+    std::ofstream &out = fout.value();
+    out.write("VERSION 200", 11);
+  }
 
   int count = 0;
   std::vector<std::string> fails;

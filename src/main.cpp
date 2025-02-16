@@ -45,6 +45,8 @@ int main(int argc, const char **argv) {
     return 0;
   }
 
+  std::filesystem::create_directories(save_dir);
+
   std::optional<Statistics> stats;
   std::optional<std::filesystem::path> nurbs_path, stl_path;
   std::optional<TopoDS_Shape> conv_shape, conv_shape_no_trim;
