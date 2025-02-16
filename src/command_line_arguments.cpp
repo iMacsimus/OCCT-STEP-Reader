@@ -19,7 +19,7 @@ Reads and parses STEP or .brep files, tesselates solid
 watertight parts and export as .stl file, specific for
 each solid. Also, converts all faces to bspline surfaces
 and exports as .nurbs (poprietary LiteRT format) file,
-specific for each solid.
+one for the whole model.
 ------------------------------------------------------------
 !!! Required Arguments:
 * --file_path <path> - path to original file
@@ -27,7 +27,7 @@ specific for each solid.
 * --save_dir <path> - directory to save output files;
 ------------------------------------------------------------
 Optional:
-* --no_nurbs: disable .nurbs files generation
+* --no_nurbs: disable .nurbs file generation
 * --no_stl: disable .stl files generation
 * --brep_no_trim: additionally save .brep file after
 convertation of all faces to bspline surface,
@@ -45,8 +45,8 @@ Arguments can be combined without any restriction. If
 without output of any files.
 ------------------------------------------------------------
 Output files:
-* <number>.stl, <number>.nurbss - output for <number>-th 
-solid part;
+* <number>.stl, <filename>.nurbs - .stl for <number>-th 
+solid part & .nurbs for the whole model
 * <filename>_notrim.brep (Optional) - output for 
 "--brep_no_trim" argument;
 * <filename>.brep (Optional) - output for "--brep" argument;

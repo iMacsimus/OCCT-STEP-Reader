@@ -56,9 +56,9 @@ struct Statistics
 
 void tesselate_solid(const TopoDS_Solid& shape, std::filesystem::path save_path);
 void convert2nurbs(
-      int shape_id,
+      int shape_id, int shapes_total,
       TopoDS_Shape shape, 
-      std::optional<std::filesystem::path> nurbs_out,
+      std::optional<std::ofstream> &fout,
       std::optional<Statistics> &stats,
       std::optional<TopoDS_Shape> &conv_shape,
       std::optional<TopoDS_Shape> &conv_shape_notrim);

@@ -30,7 +30,7 @@ void output_nurbs(Geom_BSplineSurface *bspline, std::ostream &fout) {
   }
   
   if (bspline->Weights() != nullptr) {
-    for (auto &weight: *bspline->Weights()) {
+    for (float weight: *bspline->Weights()) {
       binout(fout, weight);
     }
   } else {
@@ -43,10 +43,10 @@ void output_nurbs(Geom_BSplineSurface *bspline, std::ostream &fout) {
   int u_deg = bspline->UDegree(), v_deg = bspline->VDegree();
   binout(fout, u_deg);
   binout(fout, v_deg);
-  for (auto &knot: bspline->UKnotSequence()) {
+  for (float knot: bspline->UKnotSequence()) {
     binout(fout, knot);
   }
-  for (auto &knot: bspline->VKnotSequence()) {
+  for (float knot: bspline->VKnotSequence()) {
     binout(fout, knot);
   }
 }
@@ -66,7 +66,7 @@ void output_rbezier(Geom_BezierSurface *bezier, std::ostream &fout)
     binout(fout, point_values);
   }
   if (bezier->Weights() != nullptr) {
-    for (auto &weight: *bezier->Weights()) {
+    for (float weight: *bezier->Weights()) {
       binout(fout, weight);
     }
   } else {
@@ -81,39 +81,40 @@ void output_rbezier(Geom_BezierSurface *bezier, std::ostream &fout)
   Standard_Real umin, umax, vmin, vmax;
   bezier->Bounds(umin, umax, vmin, vmax);
   for (int i = 0; i < (bezier->NbUPoles()+bezier->UDegree()+1); ++i) {
-    binout(fout, (i < (bezier->NbUPoles()+bezier->UDegree()+1)/2 ? umin : umax));
+    auto knot = (i < (bezier->NbUPoles()+bezier->UDegree()+1)/2 ? umin : umax);
+    binout(fout, static_cast<float>(knot));
   }
   for (int i = 0; i < (bezier->NbUPoles()+bezier->UDegree()+1); ++i) {
-    binout(fout, (i < (bezier->NbUPoles()+bezier->UDegree()+1)/2 ? vmin : vmax));
+    auto knot = (i < (bezier->NbUPoles()+bezier->UDegree()+1)/2 ? vmin : vmax);
+    binout(fout, static_cast<float>(knot));
   }
 }
 
 void convert2nurbs(
-      int shape_id,
+      int shape_id, int shapes_total,
       TopoDS_Shape shape, 
-      std::optional<std::filesystem::path> nurbs_out,
+      std::optional<std::ofstream> &fout,
       std::optional<Statistics> &stats,
       std::optional<TopoDS_Shape> &conv_shape,
       std::optional<TopoDS_Shape> &conv_shape_notrim) {
-  std::cout << "Divide Closed...";
+  std::cout << "Divide Closed Faces...";
   ShapeUpgrade_ShapeDivideClosed divider(shape);
   divider.Perform();
   shape = divider.Result();
   std::cout << "Done." << std::endl;
 
-  std::optional<std::ofstream> fout = (nurbs_out) 
-                                      ? std::ofstream(nurbs_out.value(), std::ios::binary) 
-                                      : std::optional<std::ofstream>{};
-  
-  if (fout) {
-    std::ofstream &out = fout.value();
-    out.write("VERSION 200", 11);
-  }
-
-  int count = 0;
+  int count = 0, total = 0;
   std::vector<std::string> fails;
   std::vector<std::pair<std::string, TopoDS_Face>> failed_faces;
   std::array<int, geom_abs2str.size()> face_type_counts = {};
+
+  for (TopExp_Explorer ex(shape, TopAbs_FACE); ex.More(); ex.Next()) {
+    ++total;
+  }    
+  if (fout) {
+    std::ofstream &out = fout.value();
+    binout(out, total);
+  }
 
   for (TopExp_Explorer ex(shape, TopAbs_FACE); ex.More(); ex.Next()) {
     TopoDS_Face face = TopoDS::Face(ex.Current());
@@ -121,12 +122,14 @@ void convert2nurbs(
     auto type = surface.GetType();
     ++face_type_counts[type];
 
-    std::cout << "Output " << count << "face(" << geom_abs2str[type] << ")..." << std::flush;
+    std::cout << "[" << (shape_id+1)  << "/" << shapes_total << ", " 
+              << (count+1)*100.0f/total << "%] Output " << count 
+              << " face(" << geom_abs2str[type] << ")..." << std::flush;
     ++count;
     if (type == GeomAbs_BSplineSurface) {
       auto bspline_handler = surface.BSpline();
       auto bspline = bspline_handler.get();
-      if (nurbs_out) {
+      if (fout) {
         output_nurbs(bspline, fout.value());
       }
       if (conv_shape) {
@@ -138,7 +141,7 @@ void convert2nurbs(
     } else if (type == GeomAbs_BezierSurface) {
       auto bezier_handler = surface.Bezier();
       auto bezier = bezier_handler.get();
-      if (nurbs_out) {
+      if (fout) {
         output_rbezier(bezier, fout.value());
       }
       if (conv_shape) {
@@ -157,7 +160,7 @@ void convert2nurbs(
         surface = face;
         auto bspline_handler = surface.BSpline();
         auto bspline = bspline_handler.get();
-        if (nurbs_out) {
+        if (fout) {
           output_nurbs(bspline, fout.value());
         }
         if (conv_shape) {

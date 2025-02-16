@@ -13,22 +13,22 @@
 #include "common.hpp"
 
 void process_solid(
-    int shape_id,
+    int shape_id, int shapes_total,
     const TopoDS_Solid &solid,
-    std::optional<std::filesystem::path> nurbs_out,
+    std::optional<std::ofstream> &nurbs_out,
     std::optional<std::filesystem::path> stl_out,
     std::optional<Statistics>& stats,
     std::optional<TopoDS_Shape>& conv_shape,
     std::optional<TopoDS_Shape>& conv_shape_notrim) {
   if (stl_out) {
-    std::cout << "Tesselate Solid....";
+    std::cout << "[" << (shape_id+1) << "/" << shapes_total, "] Tesselate....";
     auto save_path = stl_out.value();
     tesselate_solid(solid, save_path);
     std::cout << "Done.";
   }
   if (nurbs_out || conv_shape || conv_shape_notrim) {
     std::cout << "Converting all faces..." << std::endl;
-    convert2nurbs(shape_id, solid, nurbs_out, stats, conv_shape, conv_shape_notrim);
+    convert2nurbs(shape_id, shapes_total, solid, nurbs_out, stats, conv_shape, conv_shape_notrim);
   }
 }
 
@@ -48,10 +48,18 @@ int main(int argc, const char **argv) {
   std::filesystem::create_directories(save_dir);
 
   std::optional<Statistics> stats;
-  std::optional<std::filesystem::path> nurbs_path, stl_path;
+  std::optional<std::filesystem::path> stl_path;
+  std::optional<std::ofstream> nurbs_out;
   std::optional<TopoDS_Shape> conv_shape, conv_shape_no_trim;
   if (is_specified["--log_fails"]) {
     stats = Statistics{};
+  }
+  if (!is_specified["--no_nurbs"]) {
+    auto name = file_path.filename();
+    name.replace_extension(".nurbs");
+    auto nurbs_path = save_dir / name;
+    nurbs_out = std::ofstream(nurbs_path, std::ios::binary);
+    nurbs_out.value().write("VERSION 200", 11);
   }
 
   if (file_path.extension() == ".step"
@@ -67,17 +75,22 @@ int main(int argc, const char **argv) {
     progress_th.join(); 
 
     auto shapes_for_transfer = reader.NbShapes();
-    int solid_id = 0;
+    int solid_id = 0, shapes_total = 0;
+    std::cout << "Counting shapes..." << std::flush;
     for (int i = 1; i <= shapes_for_transfer; ++i) {
       auto full_shape = reader.Shape(i);
       for (TopExp_Explorer ex(full_shape, TopAbs_SOLID); ex.More(); ex.Next()) {
-        if (!is_specified["--no_nurbs"]) {
-          nurbs_path = save_dir / (std::to_string(solid_id) + ".nurbs");
-        }
+        ++shapes_total;
+      }
+    }
+    std::cout << "Done." << std::endl;
+    for (int i = 1; i <= shapes_for_transfer; ++i) {
+      auto full_shape = reader.Shape(i);
+      for (TopExp_Explorer ex(full_shape, TopAbs_SOLID); ex.More(); ex.Next()) {
         if (!is_specified["--no_stl"]) {
           stl_path = save_dir / (std::to_string(solid_id) + ".stl");
         }
-        process_solid(solid_id, TopoDS::Solid(ex.Current()), nurbs_path, stl_path, stats, conv_shape, conv_shape_no_trim);
+        process_solid(solid_id,  shapes_total, TopoDS::Solid(ex.Current()), nurbs_out, stl_path, stats, conv_shape, conv_shape_no_trim);
         ++solid_id;
       }
     }
@@ -91,15 +104,15 @@ int main(int argc, const char **argv) {
     BRepTools::Read(shape, file_path.c_str(), builder, range);
     progress_th.join();
 
-    int solid_id = 0;
+    int solid_id = 0, shapes_total = 0;
+    for (TopExp_Explorer ex(shape, TopAbs_SOLID); ex.More(); ex.Next()) { 
+      ++shapes_total;
+    }
     for (TopExp_Explorer ex(shape, TopAbs_SOLID); ex.More(); ex.Next()) {
-      if (!is_specified["--no_nurbs"]) {
-          nurbs_path = save_dir / (std::to_string(solid_id) + ".nurbs");
-      }
       if (!is_specified["--no_stl"]) {
         stl_path = save_dir / (std::to_string(solid_id) + ".stl");
       }
-      process_solid(solid_id, TopoDS::Solid(ex.Current()), nurbs_path, stl_path, stats, conv_shape, conv_shape_no_trim);
+      process_solid(solid_id, shapes_total, TopoDS::Solid(ex.Current()), nurbs_out, stl_path, stats, conv_shape, conv_shape_no_trim);
       ++solid_id;
     }
   } else {
