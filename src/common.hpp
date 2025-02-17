@@ -29,7 +29,10 @@ void progress_bar(Message_ProgressIndicator &indicator, std::string message) {
     std::cout << '\r' << message << " " << indicator.GetPosition()*100 << "               " << std::flush;
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
-  std::cout << "\r" << message << " Done.                 " << std::endl;
+  if (true)
+    std::cout << "\r" << message << " Done.                 " << std::endl;
+  else 
+    std::cout << "\r" << message << "Failed.                " << std::endl;
 }
 
 constexpr std::array geom_abs2str = {
@@ -48,17 +51,15 @@ constexpr std::array geom_abs2str = {
 
 struct Statistics
 {
-  int faces_count;
-  std::array<int, geom_abs2str.size()> face_type_counts;
   std::vector<std::string> fails;
-  std::vector<std::pair<std::string, TopoDS_Face>> failed_faces;
+  std::vector<std::pair<std::string, TopoDS_Solid>> failed_solids;
 };
 
 void tesselate_solid(const TopoDS_Solid& shape, std::filesystem::path save_path);
 void convert2nurbs(
       int shape_id, int shapes_total,
-      TopoDS_Shape shape, 
+      TopoDS_Solid shape, 
       std::optional<std::ofstream> &fout,
       std::optional<Statistics> &stats,
-      std::optional<TopoDS_Compound> &conv_shape,
-      std::optional<TopoDS_Compound> &conv_shape_notrim);
+      std::optional<TopoDS_CompSolid> &conv_shape,
+      std::optional<TopoDS_CompSolid> &conv_shape_notrim);

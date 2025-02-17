@@ -18,8 +18,8 @@ void process_solid(
     std::optional<std::ofstream> &nurbs_out,
     std::optional<std::filesystem::path> stl_out,
     std::optional<Statistics>& stats,
-    std::optional<TopoDS_Compound>& conv_shape,
-    std::optional<TopoDS_Compound>& conv_shape_notrim) {
+    std::optional<TopoDS_CompSolid>& conv_shape,
+    std::optional<TopoDS_CompSolid>& conv_shape_notrim) {
   if (stl_out) {
     std::cout << "[" << (shape_id+1) << "/" << shapes_total, "] Tesselate....";
     auto save_path = stl_out.value();
@@ -27,7 +27,6 @@ void process_solid(
     std::cout << "Done.";
   }
   if (nurbs_out || conv_shape || conv_shape_notrim) {
-    std::cout << "Converting all faces..." << std::endl;
     convert2nurbs(shape_id, shapes_total, solid, nurbs_out, stats, conv_shape, conv_shape_notrim);
   }
 }
@@ -52,7 +51,7 @@ int main(int argc, const char **argv) {
   std::optional<Statistics> stats;
   std::optional<std::filesystem::path> stl_path;
   std::optional<std::ofstream> nurbs_out;
-  std::optional<TopoDS_Compound> conv_shape, conv_shape_no_trim;
+  std::optional<TopoDS_CompSolid> conv_shape, conv_shape_no_trim;
   if (is_specified["--log_fails"]) {
     stats = Statistics{};
   }
@@ -64,14 +63,14 @@ int main(int argc, const char **argv) {
     nurbs_out.value().write("VERSION 200", 11);
   }
   if (is_specified["--brep"]) {
-    conv_shape = TopoDS_Compound();
+    conv_shape = TopoDS_CompSolid();
     BRep_Builder builder;
-    builder.MakeCompound(conv_shape.value());
+    builder.MakeCompSolid(conv_shape.value());
   }
   if (is_specified["--brep_no_trim"]) {
-    conv_shape_no_trim = TopoDS_Compound();
+    conv_shape_no_trim = TopoDS_CompSolid();
     BRep_Builder builder;
-    builder.MakeCompound(conv_shape_no_trim.value());
+    builder.MakeCompSolid(conv_shape_no_trim.value());
   }
 
   if (file_path.extension() == ".step"
@@ -151,13 +150,8 @@ int main(int argc, const char **argv) {
   if (is_specified["--log_fails"]) {
     std::filesystem::create_directories(save_dir / "Fails");
     auto &stats_ref = stats.value();
-    for (auto &[name, face]: stats_ref.failed_faces) {
-      BRepTools::Write(face, name.c_str());
-    }
-    std::ofstream fstats(save_dir / "Fails" / "stats.txt");
-    fstats << "Stats:" << std::endl;
-    for (int i = 0; i < stats_ref.face_type_counts.size(); ++i) {
-      fstats << geom_abs2str[i] << ": " << stats_ref.face_type_counts[i] << std::endl;
+    for (auto &[name, solid]: stats_ref.failed_solids) {
+      BRepTools::Write(solid, name.c_str());
     }
     std::ofstream ffails(save_dir / "Fails" / "fails.txt");
     ffails << "Fails: " << stats_ref.fails.size() << std::endl;

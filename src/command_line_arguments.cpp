@@ -17,9 +17,9 @@ R"(OCCT STEP Reader
 ------------------------------------------------------------
 Reads and parses STEP or .brep files, tesselates solid 
 watertight parts and export as .stl file, specific for
-each solid. Also, converts all faces to bspline surfaces
-and exports as .nurbs (poprietary LiteRT format) file,
-one for the whole model.
+each solid. Also, converts all geometry to bspline curves
+ans surfaces and exports as .nurbs (poprietary LiteRT format) 
+file, one for the whole model.
 ------------------------------------------------------------
 !!! Required Arguments:
 * --file_path <path> - path to original file
@@ -35,7 +35,7 @@ except trimming curves;
 * --brep: additionally save .brep file after convertation 
 of all faces to bspline surfaces, including trimming 
 curves;
-* --log_fails: save dumps of failed to convert faces 
+* --log_fails: save dumps of failed to convert solids 
   and their error messages;
 * --help or -h: description of the command-line options
 understood by OCCT STEP Reader.
@@ -51,10 +51,9 @@ solid part & .nurbs for the whole model
 "--brep_no_trim" argument;
 * <filename>_conv.brep (Optional) - output for "--brep" argument;
 * Fails/<number>.brep (Optional) - dump of <number>-th 
-failed face;
+failed solid;
 * Fails/fails.txt (Optional) - error messages for each
-failed face;
-* Fails/stats.txt (Optional) - number of faces for each type.
+failed solid.
 )";
 
 void get_cl_args(
