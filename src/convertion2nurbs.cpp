@@ -61,13 +61,19 @@ void convert_solid(int shape_id, int shapes_total, TopoDS_Shape &shape) {
   std::cout << message << std::flush;
   BRepBuilderAPI_NurbsConvert convertor;
   try {
+    OCC_CATCH_SIGNALS
     convertor.Perform(shape);
+    shape = convertor.Shape();
   } catch(Standard_Failure &err) {
     std::cout << "Failed. Skip." << std::endl;
     std::cerr << std::to_string(shape_id) + ": " << err << std::endl;
     throw;
+  } catch(...) {
+    std::cout << "Failed. Skip." << std::endl;
+    std::cerr << std::to_string(shape_id) + ": " << "Unknown" << std::endl;
+    throw;
   }
-  shape = convertor.Shape();
+  std::cout << "Done." << std::endl;
 }
 
 void convert2nurbs(
@@ -86,13 +92,17 @@ void convert2nurbs(
   std::vector<std::pair<std::string, TopoDS_Solid>> failed_solids;
 
   try {
+    OCC_CATCH_SIGNALS
     convert_solid(shape_id, shapes_total, shape);
   } catch(Standard_Failure &err) {
     fails.push_back(std::to_string(shape_id)+": "+err.GetMessageString());
     failed_solids.push_back({std::to_string(shape_id)+".brep", shape});
+  } catch(...) {
+    fails.push_back(std::to_string(shape_id)+": "+"Unknown");
+    failed_solids.push_back({std::to_string(shape_id)+".brep", shape});
   }
 
-  if (fout) {
+  if (fout && !fails.size()) {
     std::ofstream &out = fout.value();
     binout(out, total);
     for (TopExp_Explorer ex(shape, TopAbs_FACE); ex.More(); ex.Next()) {
@@ -114,11 +124,11 @@ void convert2nurbs(
     }
   }
 
-  if (conv_shape) {
+  if (conv_shape && !fails.size()) {
     builder.Add(conv_shape.value(), shape);
   }
 
-  if (conv_shape_notrim) {
+  if (conv_shape_notrim && !fails.size()) {
     //TODO
   }
 

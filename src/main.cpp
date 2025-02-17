@@ -151,7 +151,8 @@ int main(int argc, const char **argv) {
     std::filesystem::create_directories(save_dir / "Fails");
     auto &stats_ref = stats.value();
     for (auto &[name, solid]: stats_ref.failed_solids) {
-      BRepTools::Write(solid, name.c_str());
+      auto path = save_dir / "Fails" / name;
+      BRepTools::Write(solid, path.c_str());
     }
     std::ofstream ffails(save_dir / "Fails" / "fails.txt");
     ffails << "Fails: " << stats_ref.fails.size() << std::endl;
