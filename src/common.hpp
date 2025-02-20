@@ -1,5 +1,6 @@
 #include <map>
 #include <filesystem>
+#include <iomanip>
 #include <string>
 #include <thread>
 #include <ranges>
@@ -26,9 +27,10 @@ protected:
 inline
 void progress_bar(Message_ProgressIndicator &indicator, std::string message) {
   while((1.0 - indicator.GetPosition()) > 1e-4) {
-    std::cout << '\r' << message << " " << indicator.GetPosition()*100 << "               " << std::flush;
+    std::cout << '\r' << message << " " << std::setw(10) << indicator.GetPosition()*100 << "%   " << std::flush;
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
+  std::cout << std::setw(0);
   if (true)
     std::cout << "\r" << message << " Done.                 " << std::endl;
   else 

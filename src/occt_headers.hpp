@@ -22,3 +22,17 @@
 #include <BRepBuilderAPI_Transform.hxx>
 #include <gp_Trsf.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <STEPCAFControl_Reader.hxx>
+#include <TDocStd_Application.hxx>
+#include <TDocStd_Document.hxx>
+#include <TDF_Label.hxx>
+#include <TDF_ChildIterator.hxx>
+#include <TPrsStd_AISPresentation.hxx>
+#include <TDataStd_Name.hxx>
+#include <TCollection_AsciiString.hxx>
+#include <STEPCAFControl_Controller.hxx>
+#include <STEPControl_Controller.hxx>
+#include <XCAFPrs_DocumentExplorer.hxx>
+#include <XCAFDoc_DocumentTool.hxx>
+#include <XCAFDoc_ShapeTool.hxx>
+#include <XCAFDoc_ColorTool.hxx>

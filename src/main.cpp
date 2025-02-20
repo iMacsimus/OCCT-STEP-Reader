@@ -31,6 +31,29 @@ void process_solid(
   }
 }
 
+void recursive(
+    const TDF_Label &label, 
+    Handle(XCAFDoc_ColorTool) color_tool, 
+    Handle(XCAFDoc_ShapeTool) shape_tool) {
+  Quantity_Color color(gp_Vec3f(1.0f, 1.0f, 1.0f));
+  Handle(TDataStd_Name) name;
+  
+  if (shape_tool->IsShape(label)) {
+    if (color_tool->IsSet(label, XCAFDoc_ColorSurf)) {
+      color_tool->GetColor(label, color);
+    }
+    label.FindAttribute(TDataStd_Name::GetID(), name);
+    auto name_str = (name.IsNull() ? TCollection_ExtendedString("UNDEFINED") : name->Get());
+    std::cout << "\"" << name_str << "\": " 
+              << "(" << color.Red() << ", " << color.Green() << ", " << color.Blue() << ")" 
+              << "[" << Quantity_Color::StringName(color.Name()) << "]" << std::endl;
+  } else {
+    for (TDF_ChildIterator c(label); c.More(); c.Next()) {
+      recursive(c.Value(), color_tool, shape_tool);
+    }
+  }
+}
+
 int main(int argc, const char **argv) {
   OSD::SetSignal(false);
   std::filesystem::path file_path, save_dir;
@@ -60,7 +83,7 @@ int main(int argc, const char **argv) {
     nurbs_name.replace_extension(".nurbs");
     auto nurbs_path = save_dir / nurbs_name;
     nurbs_out = std::ofstream(nurbs_path, std::ios::binary);
-    nurbs_out.value().write("VERSION 200", 11);
+    nurbs_out.value().write("VERSION 300", 11);
   }
   if (is_specified["--brep"]) {
     conv_shape = TopoDS_CompSolid();
@@ -75,36 +98,36 @@ int main(int argc, const char **argv) {
 
   if (file_path.extension() == ".step"
       || file_path.extension() == ".stp") {
-    STEPControl_Reader reader;
-    IFSelect_ReturnStatus stat = reader.ReadFile(file_path.c_str());
-    reader.PrintCheckLoad(true, IFSelect_PrintCount::IFSelect_ListByItem);
+    Handle(TDocStd_Application) app = new TDocStd_Application;
+    Handle(TDocStd_Document) doc;
+    app->NewDocument("BinXCAF", doc);
+
+    STEPCAFControl_Controller::Init();
+    STEPControl_Controller::Init();
+
+    STEPCAFControl_Reader reader;
+    reader.SetColorMode(true);
+    reader.SetNameMode(true);
+    reader.SetLayerMode(true);
+    reader.SetPropsMode(true);
+    IFSelect_ReturnStatus status = reader.ReadFile(file_path.c_str());
+    if (status != IFSelect_RetDone) {
+      throw std::runtime_error("CAF Reader returned code "+std::to_string(status));
+    }
 
     MyProgressIndicator indicator;
     Message_ProgressRange range = indicator.Start();
     std::thread progress_th(progress_bar, std::reference_wrapper(indicator), "Transferring roots from step...");
-    reader.TransferRoots(range);
+    if (!reader.Transfer(doc, range)) {
+      throw std::runtime_error("CAF Reader could not translate file");
+    }
     progress_th.join(); 
 
-    auto shapes_for_transfer = reader.NbShapes();
-    int solid_id = 0, shapes_total = 0;
-    std::cout << "Counting shapes..." << std::flush;
-    for (int i = 1; i <= shapes_for_transfer; ++i) {
-      auto full_shape = reader.Shape(i);
-      for (TopExp_Explorer ex(full_shape, TopAbs_SOLID); ex.More(); ex.Next()) {
-        ++shapes_total;
-      }
-    }
-    std::cout << "Done." << std::endl;
-    for (int i = 1; i <= shapes_for_transfer; ++i) {
-      auto full_shape = reader.Shape(i);
-      for (TopExp_Explorer ex(full_shape, TopAbs_SOLID); ex.More(); ex.Next()) {
-        if (!is_specified["--no_stl"]) {
-          stl_path = save_dir / (std::to_string(solid_id) + ".stl");
-        }
-        process_solid(solid_id,  shapes_total, TopoDS::Solid(ex.Current()), nurbs_out, stl_path, stats, conv_shape, conv_shape_no_trim);
-        ++solid_id;
-      }
-    }
+    auto root = doc->Main();
+    auto color_tool = XCAFDoc_DocumentTool::ColorTool(root);
+    auto shape_tool = XCAFDoc_DocumentTool::ShapeTool(root);
+    recursive(root, color_tool, shape_tool);
+
   } else if (file_path.extension() == ".brep") {
     BRep_Builder builder;
     TopoDS_Shape shape;
