@@ -8,7 +8,10 @@
 #include <vector>
 #include <iostream>
 #include <map>
+#include <unordered_map>
 #include <optional>
+#include <set>
+#include <tuple>
 
 #include "common.hpp"
 
@@ -31,26 +34,84 @@ void process_solid(
   }
 }
 
+struct ColorInfo
+{
+  Quantity_Color rgb;
+  XCAFDoc_ColorType type = XCAFDoc_ColorGen;
+  bool operator<(ColorInfo other) const {
+    return std::make_tuple(rgb.Red(), rgb.Green(), rgb.Blue(), type) <
+           std::make_tuple(other.rgb.Red(), other.rgb.Green(), other.rgb.Blue(), other.type);
+  }
+};
+
 void recursive(
     const TDF_Label &label, 
     Handle(XCAFDoc_ColorTool) color_tool, 
-    Handle(XCAFDoc_ShapeTool) shape_tool) {
-  Quantity_Color color(gp_Vec3f(1.0f, 1.0f, 1.0f));
+    Handle(XCAFDoc_ShapeTool) shape_tool,
+    std::unordered_map<TDF_Label, ColorInfo> &cached,
+    ColorInfo parent_color = ColorInfo{},
+    bool is_root = true) {
+  ColorInfo my_color{};
   Handle(TDataStd_Name) name;
+
+  if (!color_tool->IsSet(label, XCAFDoc_ColorSurf)) {
+    if (parent_color.type == XCAFDoc_ColorSurf) {
+      my_color = parent_color;
+    }
+  } else {
+    color_tool->GetColor(label, XCAFDoc_ColorSurf, my_color.rgb);
+    my_color.type = XCAFDoc_ColorSurf;
+  }
+
+  if (cached.find(label) == cached.end()) {
+    std::set<ColorInfo> child_colors;
+    for (TDF_ChildIterator c(label); c.More(); c.Next()) {
+      recursive(c.Value(), color_tool, shape_tool, cached, my_color, false);
+      child_colors.insert(cached[c.Value()]);
+    }
+
+    if (child_colors.size() > 1) {
+      cached[label] = ColorInfo{};
+    } else if (child_colors.empty()) {
+      cached[label] = my_color;
+    } else {
+      cached[label] = *child_colors.begin();
+    }
+  }
+
+  if (!is_root) {
+    return;
+  }
+
+  my_color = cached[label];
   
   if (shape_tool->IsShape(label)) {
-    if (color_tool->IsSet(label, XCAFDoc_ColorSurf)) {
-      color_tool->GetColor(label, color);
+    auto shape = shape_tool->GetShape(label);
+    auto shape_type = shape.ShapeType();
+    bool divide = false;
+    // divide |= shape_type == TopAbs_COMPOUND;
+    // divide |= shape_type == TopAbs_COMPSOLID;
+    divide |= (cached[label].type == XCAFDoc_ColorGen) && (label.NbChildren() != 0);
+
+    if (!divide) {
+      label.FindAttribute(TDataStd_Name::GetID(), name);
+      auto name_str = (name.IsNull() ? TCollection_ExtendedString("UNDEFINED") : name->Get());
+      std::cout << name_str << ": ";
+      if (my_color.type = XCAFDoc_ColorGen) {
+        std::cout << "UNDEFINED (defaulted to WHITE)" << std::endl;
+        //std::ignore = std::getchar();
+      } else {
+        auto color = my_color.rgb;
+        std::cout << "(" << color.Red() << ", " << color.Green() << ", " << color.Blue() << ")" 
+                << "[" << Quantity_Color::StringName(color.Name()) << "]" << std::endl;
+        //std::ignore = std::getchar();
+      }
+      return;
     }
-    label.FindAttribute(TDataStd_Name::GetID(), name);
-    auto name_str = (name.IsNull() ? TCollection_ExtendedString("UNDEFINED") : name->Get());
-    std::cout << "\"" << name_str << "\": " 
-              << "(" << color.Red() << ", " << color.Green() << ", " << color.Blue() << ")" 
-              << "[" << Quantity_Color::StringName(color.Name()) << "]" << std::endl;
-  } else {
-    for (TDF_ChildIterator c(label); c.More(); c.Next()) {
-      recursive(c.Value(), color_tool, shape_tool);
-    }
+  }
+
+  for (TDF_ChildIterator c(label); c.More(); c.Next()) {
+    recursive(c.Value(), color_tool, shape_tool, cached, my_color, true);
   }
 }
 
@@ -126,7 +187,8 @@ int main(int argc, const char **argv) {
     auto root = doc->Main();
     auto color_tool = XCAFDoc_DocumentTool::ColorTool(root);
     auto shape_tool = XCAFDoc_DocumentTool::ShapeTool(root);
-    recursive(root, color_tool, shape_tool);
+    std::unordered_map<TDF_Label, ColorInfo> cached;
+    recursive(root, color_tool, shape_tool, cached);
 
   } else if (file_path.extension() == ".brep") {
     BRep_Builder builder;
