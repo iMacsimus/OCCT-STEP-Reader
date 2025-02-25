@@ -57,11 +57,8 @@ struct Statistics
   std::vector<std::pair<std::string, TopoDS_Solid>> failed_solids;
 };
 
-void tesselate_solid(const TopoDS_Solid& shape, std::filesystem::path save_path);
+void tesselate_shape(const TopoDS_Shape& shape, std::filesystem::path path);
 void convert2nurbs(
-      int shape_id, int shapes_total,
-      TopoDS_Solid shape, 
-      std::optional<std::ofstream> &fout,
-      std::optional<Statistics> &stats,
-      std::optional<TopoDS_CompSolid> &conv_shape,
-      std::optional<TopoDS_CompSolid> &conv_shape_notrim);
+      const TCollection_ExtendedString &name,
+      TopoDS_Shape shape, 
+      std::ofstream &fout);

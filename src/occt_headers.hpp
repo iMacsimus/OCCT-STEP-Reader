@@ -36,3 +36,5 @@
 #include <XCAFDoc_DocumentTool.hxx>
 #include <XCAFDoc_ShapeTool.hxx>
 #include <XCAFDoc_ColorTool.hxx>
+#include <RWObj_CafWriter.hxx>
+#include <BRepLib_ToolTriangulatedShape.hxx>

@@ -1,14 +1,34 @@
 #include <filesystem>
-#include "occt_headers.hpp"
+#include "common.hpp"
 
-void export_to_stl(const TopoDS_Shape& shape, std::filesystem::path path) {
-  StlAPI_Writer writer;
-  writer.Write(shape, path.c_str());
-}
+void tesselate_shape(const TopoDS_Shape& shape, std::filesystem::path path) {
+  Handle(TDocStd_Application) app = new TDocStd_Application;
+  Handle(TDocStd_Document) doc;
+  app->NewDocument("ConvSTP2obj", doc);
+  
+  TopLoc_Location aLoc;
+  for (TopExp_Explorer aFaceIter (shape, TopAbs_FACE); aFaceIter.More(); aFaceIter.Next()) {
+    const TopoDS_Face& aFace = TopoDS::Face(aFaceIter.Current());
+    Handle(Poly_Triangulation) aT = BRep_Tool::Triangulation (aFace, aLoc);
+    if (aT.IsNull()) { 
+      BRepMesh_IncrementalMesh tesselator(shape, 0.1f, true, 0.5f, true);
+    }
+    BRepLib_ToolTriangulatedShape::ComputeNormals(aFace, aT);
+  }
 
-void tesselate_solid(const TopoDS_Solid& shape, std::filesystem::path save_path) {
-    // Тесселяция с Deflection = 0.1
-    double deflection = 0.1;
-    BRepMesh_IncrementalMesh tesselator(shape, deflection, true, 0.5f, true);
-    export_to_stl(shape, save_path);
+  Handle(XCAFDoc_ShapeTool) newShapeTool = XCAFDoc_DocumentTool::ShapeTool(doc->Main());
+  newShapeTool->AddComponent(doc->Main(), shape);
+
+  RWObj_CafWriter writer(path.c_str());
+  TColStd_IndexedDataMapOfStringString map;
+
+  MyProgressIndicator indicator;
+  auto range = indicator.Start();
+  
+  auto name = path.filename();
+  name.replace_extension("");
+
+  std::cout << std::string("Tesselating " + name.string() + "... ") << std::flush;
+  writer.Perform(doc, map, range);
+  std::cout << "Done." << std::endl;
 }

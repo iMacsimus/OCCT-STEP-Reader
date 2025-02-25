@@ -15,28 +15,21 @@
 
 #include "common.hpp"
 
-void process_solid(
-    int shape_id, int shapes_total,
-    const TopoDS_Solid &solid,
-    std::optional<std::ofstream> &nurbs_out,
-    std::optional<std::filesystem::path> stl_out,
-    std::optional<Statistics>& stats,
-    std::optional<TopoDS_CompSolid>& conv_shape,
-    std::optional<TopoDS_CompSolid>& conv_shape_notrim) {
-  if (stl_out) {
-    std::cout << "[" << (shape_id+1) << "/" << shapes_total, "] Tesselate....";
-    auto save_path = stl_out.value();
-    tesselate_solid(solid, save_path);
-    std::cout << "Done.";
-  }
-  if (nurbs_out || conv_shape || conv_shape_notrim) {
-    convert2nurbs(shape_id, shapes_total, solid, nurbs_out, stats, conv_shape, conv_shape_notrim);
-  }
-}
+constexpr const char *shape2str[] = {
+  "TopAbs_COMPOUND",
+  "TopAbs_COMPSOLID",
+  "TopAbs_SOLID",
+  "TopAbs_SHELL",
+  "TopAbs_FACE",
+  "TopAbs_WIRE",
+  "TopAbs_EDGE",
+  "TopAbs_VERTEX",
+  "TopAbs_SHAPE"
+};
 
 struct ColorInfo
 {
-  Quantity_Color rgb;
+  Quantity_Color rgb = Quantity_NOC_WHITE;
   XCAFDoc_ColorType type = XCAFDoc_ColorGen;
   bool operator<(ColorInfo other) const {
     return std::make_tuple(rgb.Red(), rgb.Green(), rgb.Blue(), type) <
@@ -44,15 +37,94 @@ struct ColorInfo
   }
 };
 
-void recursive(
+class Converter
+{
+public:
+  bool do_obj = true;
+  bool do_nurbs = true;
+  std::filesystem::path save_dir;
+public:
+  void process_shape(
+    const TopoDS_Shape &shape,
+    Quantity_Color color,
+    const TCollection_ExtendedString&name);
+  void process(Handle(TDocStd_Document) doc);
+private:
+  int undef_counter = 0;
+  int cur_id = 0;
+  void process_recursive(
     const TDF_Label &label, 
     Handle(XCAFDoc_ColorTool) color_tool, 
     Handle(XCAFDoc_ShapeTool) shape_tool,
     std::unordered_map<TDF_Label, ColorInfo> &cached,
     ColorInfo parent_color = ColorInfo{},
-    bool is_root = true) {
+    bool is_root = true);
+};
+
+void Converter::process_shape(
+    const TopoDS_Shape &shape,
+    Quantity_Color color,
+    const TCollection_ExtendedString &name) {
+  int counter = 0;
+  auto cur_id_str = std::to_string(cur_id);
+  for (TopExp_Explorer ex(shape, TopAbs_SOLID); ex.More(); ex.Next()) {
+    if (do_obj) {
+      auto counter_str = std::to_string(counter++);
+      auto cur_name = name+"_#"+cur_id_str.c_str()+"_SOLID_"+counter_str.c_str()+".obj";
+      std::ofstream table(save_dir / "name-col-type.txt", std::ios::app);
+      table << cur_name << ", (" << color.Red() << ", " << color.Green() << ", " << color.Blue() << "), " 
+            << shape2str[shape.ShapeType()] << ";" << std::endl;
+      auto cur_dir = save_dir / cur_name.ToExtString();
+      tesselate_shape(ex.Current(), cur_dir);
+    }
+    if (do_nurbs) {
+      std::ofstream nurbs_out(save_dir/"converted.nurbs", std::ios::binary | std::ios::app);
+      convert2nurbs(name, shape, nurbs_out);
+    }
+  }
+  counter = 0;
+  for (TopExp_Explorer ex(shape, TopAbs_SHELL, TopAbs_SOLID); ex.More(); ex.Next()) {
+    if (do_obj) {
+      auto counter_str = std::to_string(counter++);
+      auto cur_name = name+"_#"+cur_id_str.c_str()+"_SHELL_"+counter_str.c_str()+".obj";
+      std::ofstream table(save_dir / "name-col-type.txt", std::ios::app);
+      table << cur_name << ", (" << color.Red() << ", " << color.Green() << ", " << color.Blue() << "), " 
+            << shape2str[shape.ShapeType()] << ";" << std::endl;
+      auto cur_dir = save_dir / cur_name.ToExtString();
+      tesselate_shape(ex.Current(), cur_dir);
+    }
+    if (do_nurbs) {
+      std::ofstream nurbs_out(save_dir/"converted.nurbs", std::ios::binary | std::ios::app);
+      convert2nurbs(name, shape, nurbs_out);
+    }
+  }
+  counter = 0;
+  for (TopExp_Explorer ex(shape, TopAbs_FACE, TopAbs_SHELL); ex.More(); ex.Next()) {
+    if (do_obj) {
+      auto counter_str = std::to_string(counter++);
+      auto cur_name = name+"_#"+cur_id_str.c_str()+"_FACE_"+counter_str.c_str()+".obj";
+      std::ofstream table(save_dir / "name-col-type.txt", std::ios::app);
+      table << cur_name << ", (" << color.Red() << ", " << color.Green() << ", " << color.Blue() << "), " 
+            << shape2str[shape.ShapeType()] << ";" << std::endl;
+      auto cur_dir = save_dir / cur_name.ToExtString();
+      tesselate_shape(ex.Current(), cur_dir);
+    }
+    if (do_nurbs) {
+      std::ofstream nurbs_out(save_dir/"converted.nurbs", std::ios::binary | std::ios::app);
+      convert2nurbs(name, shape, nurbs_out);
+    }
+  }
+  ++cur_id;
+}
+
+void Converter::process_recursive(
+    const TDF_Label &label, 
+    Handle(XCAFDoc_ColorTool) color_tool, 
+    Handle(XCAFDoc_ShapeTool) shape_tool,
+    std::unordered_map<TDF_Label, ColorInfo> &cached,
+    ColorInfo parent_color,
+    bool is_root) {
   ColorInfo my_color{};
-  Handle(TDataStd_Name) name;
 
   if (!color_tool->IsSet(label, XCAFDoc_ColorSurf)) {
     if (parent_color.type == XCAFDoc_ColorSurf) {
@@ -66,7 +138,7 @@ void recursive(
   if (cached.find(label) == cached.end()) {
     std::set<ColorInfo> child_colors;
     for (TDF_ChildIterator c(label); c.More(); c.Next()) {
-      recursive(c.Value(), color_tool, shape_tool, cached, my_color, false);
+      process_recursive(c.Value(), color_tool, shape_tool, cached, my_color, false);
       child_colors.insert(cached[c.Value()]);
     }
 
@@ -88,31 +160,37 @@ void recursive(
   if (shape_tool->IsShape(label)) {
     auto shape = shape_tool->GetShape(label);
     auto shape_type = shape.ShapeType();
-    bool divide = false;
-    // divide |= shape_type == TopAbs_COMPOUND;
-    // divide |= shape_type == TopAbs_COMPSOLID;
-    divide |= (cached[label].type == XCAFDoc_ColorGen) && (label.NbChildren() != 0);
+    bool divide = (cached[label].type == XCAFDoc_ColorGen) && (label.NbChildren() != 0);
 
     if (!divide) {
-      label.FindAttribute(TDataStd_Name::GetID(), name);
-      auto name_str = (name.IsNull() ? TCollection_ExtendedString("UNDEFINED") : name->Get());
-      std::cout << name_str << ": ";
-      if (my_color.type = XCAFDoc_ColorGen) {
-        std::cout << "UNDEFINED (defaulted to WHITE)" << std::endl;
-        //std::ignore = std::getchar();
-      } else {
-        auto color = my_color.rgb;
-        std::cout << "(" << color.Red() << ", " << color.Green() << ", " << color.Blue() << ")" 
-                << "[" << Quantity_Color::StringName(color.Name()) << "]" << std::endl;
-        //std::ignore = std::getchar();
+      Handle(TDataStd_Name) maybe_name;
+      label.FindAttribute(TDataStd_Name::GetID(), maybe_name);
+      std::string untitled = "Untitled" + std::to_string(undef_counter);
+      auto name = (maybe_name.IsNull() 
+                                              ? TCollection_ExtendedString(untitled.c_str()) 
+                                              : maybe_name->Get());
+      if (name == untitled.c_str()) {
+        ++undef_counter;
       }
+
+      process_shape(shape, my_color.rgb, name);
       return;
     }
   }
 
   for (TDF_ChildIterator c(label); c.More(); c.Next()) {
-    recursive(c.Value(), color_tool, shape_tool, cached, my_color, true);
+    process_recursive(c.Value(), color_tool, shape_tool, cached, my_color, true);
   }
+}
+
+void Converter::process(Handle(TDocStd_Document) doc) {
+  cur_id = 0;
+  undef_counter = 0;
+  auto root = doc->Main();
+  auto color_tool = XCAFDoc_DocumentTool::ColorTool(root);
+  auto shape_tool = XCAFDoc_DocumentTool::ShapeTool(root);
+  std::unordered_map<TDF_Label, ColorInfo> cached;
+  process_recursive(root, color_tool, shape_tool, cached);
 }
 
 int main(int argc, const char **argv) {
@@ -128,40 +206,15 @@ int main(int argc, const char **argv) {
     return 0;
   }
 
+  std::filesystem::remove_all(save_dir);
   std::filesystem::create_directories(save_dir);
-  auto name = file_path.filename();
-  name.replace_extension("");
-
-  std::optional<Statistics> stats;
-  std::optional<std::filesystem::path> stl_path;
-  std::optional<std::ofstream> nurbs_out;
-  std::optional<TopoDS_CompSolid> conv_shape, conv_shape_no_trim;
-  if (is_specified["--log_fails"]) {
-    stats = Statistics{};
-  }
-  if (!is_specified["--no_nurbs"]) {
-    auto nurbs_name = name;
-    nurbs_name.replace_extension(".nurbs");
-    auto nurbs_path = save_dir / nurbs_name;
-    nurbs_out = std::ofstream(nurbs_path, std::ios::binary);
-    nurbs_out.value().write("VERSION 300", 11);
-  }
-  if (is_specified["--brep"]) {
-    conv_shape = TopoDS_CompSolid();
-    BRep_Builder builder;
-    builder.MakeCompSolid(conv_shape.value());
-  }
-  if (is_specified["--brep_no_trim"]) {
-    conv_shape_no_trim = TopoDS_CompSolid();
-    BRep_Builder builder;
-    builder.MakeCompSolid(conv_shape_no_trim.value());
-  }
 
   if (file_path.extension() == ".step"
       || file_path.extension() == ".stp") {
     Handle(TDocStd_Application) app = new TDocStd_Application;
     Handle(TDocStd_Document) doc;
     app->NewDocument("BinXCAF", doc);
+
 
     STEPCAFControl_Controller::Init();
     STEPControl_Controller::Init();
@@ -184,66 +237,16 @@ int main(int argc, const char **argv) {
     }
     progress_th.join(); 
 
-    auto root = doc->Main();
-    auto color_tool = XCAFDoc_DocumentTool::ColorTool(root);
-    auto shape_tool = XCAFDoc_DocumentTool::ShapeTool(root);
-    std::unordered_map<TDF_Label, ColorInfo> cached;
-    recursive(root, color_tool, shape_tool, cached);
-
-  } else if (file_path.extension() == ".brep") {
-    BRep_Builder builder;
-    TopoDS_Shape shape;
-
-    MyProgressIndicator indicator;
-    Message_ProgressRange range = indicator.Start();
-    std::thread progress_th(progress_bar, std::reference_wrapper(indicator), "Reading .brep file...");
-    BRepTools::Read(shape, file_path.c_str(), builder, range);
-    progress_th.join();
-
-    int solid_id = 0, shapes_total = 0;
-    for (TopExp_Explorer ex(shape, TopAbs_SOLID); ex.More(); ex.Next()) { 
-      ++shapes_total;
-    }
-    for (TopExp_Explorer ex(shape, TopAbs_SOLID); ex.More(); ex.Next()) {
-      if (!is_specified["--no_stl"]) {
-        stl_path = save_dir / (std::to_string(solid_id) + ".stl");
-      }
-      process_solid(solid_id, shapes_total, TopoDS::Solid(ex.Current()), nurbs_out, stl_path, stats, conv_shape, conv_shape_no_trim);
-      ++solid_id;
-    }
+    Converter converter;
+    converter.do_nurbs = false; //!is_specified["--no_nurbs"];
+    converter.do_obj = !is_specified["--no_obj"];
+    converter.save_dir = save_dir;
+    converter.process(doc);
   } else {
     throw std::invalid_argument(
         std::string("Incorrect format (")
       + file_path.extension().string()
-      + "). Must be one of { .step, .stp, .brep }");
-  }
-
-  if (conv_shape) {
-    std::cout << "Writing converted model to .brep..." << std::flush;
-    auto conv_path = save_dir / (name.string()+"_conv.brep");
-    BRepTools::Write(conv_shape.value(), conv_path.c_str());
-    std::cout << "Done." << std::endl;
-  }
-
-  if (conv_shape_no_trim) {
-    std::cout << "Writing untrimmed converted model to .brep..." << std::flush;
-    auto conv_path = save_dir / (name.string()+"_conv_notrim.brep");
-    BRepTools::Write(conv_shape_no_trim.value(), conv_path.c_str());
-    std::cout << "Done." << std::endl;
-  }
-
-  if (is_specified["--log_fails"]) {
-    std::filesystem::create_directories(save_dir / "Fails");
-    auto &stats_ref = stats.value();
-    for (auto &[name, solid]: stats_ref.failed_solids) {
-      auto path = save_dir / "Fails" / name;
-      BRepTools::Write(solid, path.c_str());
-    }
-    std::ofstream ffails(save_dir / "Fails" / "fails.txt");
-    ffails << "Fails: " << stats_ref.fails.size() << std::endl;
-    for (auto &fail: stats_ref.fails) {
-      ffails << fail << std::endl;
-    }
+      + "). Must be one of { .step, .stp }");
   }
 
   return 0;

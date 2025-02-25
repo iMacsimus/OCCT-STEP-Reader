@@ -52,89 +52,59 @@ void output_nurbs(Geom_BSplineSurface *bspline, std::ostream &fout) {
   }
 }
 
-void convert_solid(int shape_id, int shapes_total, TopoDS_Shape &shape) {
-  std::string message = std::string("[")
-                      + std::to_string(shape_id+1) 
-                      + "/" 
-                      + std::to_string(shapes_total)
-                      + "] Convert to bspline....";
-  std::cout << message << std::flush;
+auto convert_shape(TopoDS_Shape &shape, const TCollection_ExtendedString &name) {
+  std::vector<TopoDS_Face> faces;
   BRepBuilderAPI_NurbsConvert convertor;
-  try {
-    OCC_CATCH_SIGNALS
-    convertor.Perform(shape);
-    shape = convertor.Shape();
-  } catch(Standard_Failure &err) {
-    std::cout << "Failed. Skip." << std::endl;
-    std::cerr << std::to_string(shape_id) + ": " << err << std::endl;
-    throw;
-  } catch(...) {
-    std::cout << "Failed. Skip." << std::endl;
-    std::cerr << std::to_string(shape_id) + ": " << "Unknown" << std::endl;
-    throw;
+  int total = 0;
+  for (TopExp_Explorer ex(shape, TopAbs_FACE); ex.More(); ex.Next()) {
+    std::cout << "Converting \"" << name << "\"'s " << total << "th face to Bspline..." << std::flush;
+    auto face = ex.Current();
+    try {
+      OCC_CATCH_SIGNALS
+      convertor.Perform(face);
+      face = convertor.Shape();
+      BRepAdaptor_Surface surface(TopoDS::Face(face));
+      auto type = surface.GetType();
+      if (type != GeomAbs_BSplineSurface) {
+        throw Standard_Failure("Type after convertion is not bspline surface");
+      }
+      faces.push_back(TopoDS::Face(face));
+    } catch(Standard_Failure &err) {
+      std::cout << "Failed. Skip." << std::endl;
+      std::cerr << name + ": " << err << std::endl;
+      continue;
+    } catch(...) {
+      std::cout << "Failed. Skip." << std::endl;
+      std::cerr << name + ": " << "Unknown" << std::endl;
+      continue;
+    }
+    ++total;
+    std::cout <<"Done." << std::endl;
   }
-  std::cout << "Done." << std::endl;
+
+  return faces;
 }
 
 void convert2nurbs(
-      int shape_id, int shapes_total,
-      TopoDS_Solid shape, 
-      std::optional<std::ofstream> &fout,
-      std::optional<Statistics> &stats,
-      std::optional<TopoDS_CompSolid> &conv_shape,
-      std::optional<TopoDS_CompSolid> &conv_shape_notrim) {
+      const TCollection_ExtendedString &name,
+      TopoDS_Shape shape,
+      std::ofstream &fout) {
   BRep_Builder builder;
 
-  int count = 0, total = 0;
-  for (TopExp_Explorer ex(shape, TopAbs_FACE); ex.More(); ex.Next()) { ++total; }
+  auto faces = convert_shape(shape, name);
+  binout(fout, static_cast<int>(faces.size()));
 
-  std::vector<std::string> fails;
-  std::vector<std::pair<std::string, TopoDS_Solid>> failed_solids;
+  std::cout << "Output \"" << name << "\" to .nurbs..." << std::flush;
+  for (auto &face: faces) {
+    BRepAdaptor_Surface surface(face);
+    auto type = surface.GetType();
+    //assert(type == GeomAbs_BSplineSurface);
 
-  try {
-    OCC_CATCH_SIGNALS
-    convert_solid(shape_id, shapes_total, shape);
-  } catch(Standard_Failure &err) {
-    fails.push_back(std::to_string(shape_id)+": "+err.GetMessageString());
-    failed_solids.push_back({std::to_string(shape_id)+".brep", shape});
-  } catch(...) {
-    fails.push_back(std::to_string(shape_id)+": "+"Unknown");
-    failed_solids.push_back({std::to_string(shape_id)+".brep", shape});
-  }
-
-  if (fout && !fails.size()) {
-    std::ofstream &out = fout.value();
-    binout(out, total);
-    for (TopExp_Explorer ex(shape, TopAbs_FACE); ex.More(); ex.Next()) {
-      TopoDS_Face face = TopoDS::Face(ex.Current());
-      BRepAdaptor_Surface surface(face);
-      auto type = surface.GetType();
-      assert(type == GeomAbs_BSplineSurface);
-
-      std::cout << "[" << (shape_id+1)  << "/" << shapes_total << ", " 
-                << (count+1)*100.0f/total << "%] Output " << count 
-                << " face(" << geom_abs2str[type] << ")..." << std::flush;
-      ++count;
-      auto bspline_handler = surface.BSpline();
-      auto bspline = bspline_handler.get();
-      if (fout) {
-        output_nurbs(bspline, fout.value());
-      }
-      std::cout << "Done." << std::endl;
+    auto bspline_handler = surface.BSpline();
+    auto bspline = bspline_handler.get();
+    if (fout) {
+      output_nurbs(bspline, fout);
     }
   }
-
-  if (conv_shape && !fails.size()) {
-    builder.Add(conv_shape.value(), shape);
-  }
-
-  if (conv_shape_notrim && !fails.size()) {
-    //TODO
-  }
-
-  if (stats) {
-    auto &stats_ref = stats.value();
-    std::copy(fails.begin(), fails.end(), std::back_inserter(stats_ref.fails));
-    std::copy(failed_solids.begin(), failed_solids.end(), std::back_inserter(stats_ref.failed_solids));
-  }
+  std::cout << "Done." << std::endl;
 }

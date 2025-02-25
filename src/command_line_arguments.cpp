@@ -9,14 +9,14 @@ std::map<std::string, bool> is_required = {
   { "--brep", false },
   { "--log_fails", false },
   { "--no_nurbs", false },
-  { "--no_stl", false }
+  { "--no_obj", false }
 };
 
 const char help_message_cstr[] = 
 R"(OCCT STEP Reader
 ------------------------------------------------------------
-Reads and parses STEP or .brep files, tesselates solid 
-watertight parts and export as .stl file, specific for
+Reads and parses STEP or .brep files, tesselates unicolored 
+parts and export as .obj file, specific for
 each solid. Also, converts all geometry to bspline curves
 ans surfaces and exports as .nurbs (poprietary LiteRT format) 
 file, one for the whole model.
@@ -28,15 +28,7 @@ file, one for the whole model.
 ------------------------------------------------------------
 Optional:
 * --no_nurbs: disable .nurbs file generation
-* --no_stl: disable .stl files generation
-* --brep_no_trim: additionally save .brep file after
-convertation of all faces to bspline surface,
-except trimming curves;
-* --brep: additionally save .brep file after convertation 
-of all faces to bspline surfaces, including trimming 
-curves;
-* --log_fails: save dumps of failed to convert solids 
-  and their error messages;
+* --no_obj: disable .obj files generation
 * --help or -h: description of the command-line options
 understood by OCCT STEP Reader.
 
@@ -45,15 +37,9 @@ Arguments can be combined without any restriction. If
 without output of any files.
 ------------------------------------------------------------
 Output files:
-* <number>.stl, <filename>.nurbs - .stl for <number>-th 
-solid part & .nurbs for the whole model
-* <filename>_conv_notrim.brep (Optional) - output for 
-"--brep_no_trim" argument;
-* <filename>_conv.brep (Optional) - output for "--brep" argument;
-* Fails/<number>.brep (Optional) - dump of <number>-th 
-failed solid;
-* Fails/fails.txt (Optional) - error messages for each
-failed solid.
+* <name>.obj, name-col-type.txt, converted.nurbs - .obj for 
+some part, table with color and type of part, 
+.nurbs for the whole model
 )";
 
 void get_cl_args(
@@ -70,7 +56,7 @@ void get_cl_args(
     { "--brep", false },
     { "--log_fails", false },
     { "--no_nurbs", false },
-    { "--no_stl", false }
+    { "--no_obj", false }
   };
 
   for (int i = 1; i < argc; ++i) {
