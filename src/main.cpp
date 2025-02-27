@@ -67,52 +67,17 @@ void Converter::process_shape(
     const TCollection_ExtendedString &name) {
   int counter = 0;
   auto cur_id_str = std::to_string(cur_id);
-  for (TopExp_Explorer ex(shape, TopAbs_SOLID); ex.More(); ex.Next()) {
-    if (do_obj) {
-      auto counter_str = std::to_string(counter++);
-      auto cur_name = name+"_#"+cur_id_str.c_str()+"_SOLID_"+counter_str.c_str()+".obj";
-      std::ofstream table(save_dir / "name-col-type.txt", std::ios::app);
-      table << cur_name << ", (" << color.Red() << ", " << color.Green() << ", " << color.Blue() << "), " 
-            << shape2str[shape.ShapeType()] << ";" << std::endl;
-      auto cur_dir = save_dir / cur_name.ToExtString();
-      tesselate_shape(ex.Current(), cur_dir);
-    }
-    if (do_nurbs) {
-      std::ofstream nurbs_out(save_dir/"converted.nurbs", std::ios::binary | std::ios::app);
-      convert2nurbs(name, shape, nurbs_out);
-    }
+  auto cur_name = name+"_#"+cur_id_str.c_str();
+  if (do_obj) {
+    std::ofstream table(save_dir / "name-col-type.txt", std::ios::app);
+    table << cur_name << ", (" << color.Red() << ", " << color.Green() << ", " << color.Blue() << "), " 
+          << shape2str[shape.ShapeType()] << ";" << std::endl;
+    auto cur_dir = save_dir / (cur_name+".obj").ToExtString();
+    tesselate_shape(shape, cur_dir);
   }
-  counter = 0;
-  for (TopExp_Explorer ex(shape, TopAbs_SHELL, TopAbs_SOLID); ex.More(); ex.Next()) {
-    if (do_obj) {
-      auto counter_str = std::to_string(counter++);
-      auto cur_name = name+"_#"+cur_id_str.c_str()+"_SHELL_"+counter_str.c_str()+".obj";
-      std::ofstream table(save_dir / "name-col-type.txt", std::ios::app);
-      table << cur_name << ", (" << color.Red() << ", " << color.Green() << ", " << color.Blue() << "), " 
-            << shape2str[shape.ShapeType()] << ";" << std::endl;
-      auto cur_dir = save_dir / cur_name.ToExtString();
-      tesselate_shape(ex.Current(), cur_dir);
-    }
-    if (do_nurbs) {
-      std::ofstream nurbs_out(save_dir/"converted.nurbs", std::ios::binary | std::ios::app);
-      convert2nurbs(name, shape, nurbs_out);
-    }
-  }
-  counter = 0;
-  for (TopExp_Explorer ex(shape, TopAbs_FACE, TopAbs_SHELL); ex.More(); ex.Next()) {
-    if (do_obj) {
-      auto counter_str = std::to_string(counter++);
-      auto cur_name = name+"_#"+cur_id_str.c_str()+"_FACE_"+counter_str.c_str()+".obj";
-      std::ofstream table(save_dir / "name-col-type.txt", std::ios::app);
-      table << cur_name << ", (" << color.Red() << ", " << color.Green() << ", " << color.Blue() << "), " 
-            << shape2str[shape.ShapeType()] << ";" << std::endl;
-      auto cur_dir = save_dir / cur_name.ToExtString();
-      tesselate_shape(ex.Current(), cur_dir);
-    }
-    if (do_nurbs) {
-      std::ofstream nurbs_out(save_dir/"converted.nurbs", std::ios::binary | std::ios::app);
-      convert2nurbs(name, shape, nurbs_out);
-    }
+  if (do_nurbs) {
+    std::ofstream nurbs_out(save_dir/"converted.nurbs", std::ios::binary | std::ios::app);
+    convert2nurbs(cur_name, shape, nurbs_out);
   }
   ++cur_id;
 }

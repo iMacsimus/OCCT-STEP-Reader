@@ -7,12 +7,10 @@ void tesselate_shape(const TopoDS_Shape& shape, std::filesystem::path path) {
   app->NewDocument("ConvSTP2obj", doc);
   
   TopLoc_Location aLoc;
+  BRepMesh_IncrementalMesh tesselator(shape, 0.1f, true, 0.5f, true);
   for (TopExp_Explorer aFaceIter (shape, TopAbs_FACE); aFaceIter.More(); aFaceIter.Next()) {
     const TopoDS_Face& aFace = TopoDS::Face(aFaceIter.Current());
     Handle(Poly_Triangulation) aT = BRep_Tool::Triangulation (aFace, aLoc);
-    if (aT.IsNull()) { 
-      BRepMesh_IncrementalMesh tesselator(shape, 0.1f, true, 0.5f, true);
-    }
     BRepLib_ToolTriangulatedShape::ComputeNormals(aFace, aT);
   }
 
