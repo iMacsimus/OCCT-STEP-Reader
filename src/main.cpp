@@ -203,7 +203,7 @@ int main(int argc, const char **argv) {
     progress_th.join(); 
 
     Converter converter;
-    converter.do_nurbs = false; //!is_specified["--no_nurbs"];
+    converter.do_nurbs = !is_specified["--no_nurbs"];
     converter.do_obj = !is_specified["--no_obj"];
     converter.save_dir = save_dir;
     converter.process(doc);
