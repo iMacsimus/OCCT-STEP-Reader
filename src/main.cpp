@@ -69,7 +69,7 @@ void Converter::process_shape(
   auto cur_id_str = std::to_string(cur_id);
   auto cur_name = name+"_#"+cur_id_str.c_str();
   if (do_obj) {
-    std::ofstream table(save_dir / "name-col-type.txt", std::ios::app);
+    std::ofstream table(save_dir / "name-col-type.csv", std::ios::app);
     table << cur_name << ", (" << color.Red() << ", " << color.Green() << ", " << color.Blue() << "), " 
           << shape2str[shape.ShapeType()] << ";" << std::endl;
     auto cur_dir = save_dir / (cur_name+".obj").ToExtString();
@@ -171,8 +171,14 @@ int main(int argc, const char **argv) {
     return 0;
   }
 
-  std::filesystem::remove_all(save_dir);
   std::filesystem::create_directories(save_dir);
+  if (!is_specified["--no_nurbs"]) {
+    std::ofstream nurbs_out(save_dir/"converted.nurbs", std::ios::trunc | std::ios::binary);
+    nurbs_out.write("VERSION 201", 11);
+  }
+  if (!is_specified["--no_obj"]) {
+    std::ofstream(save_dir/"name-col-type.svg", std::ios::trunc);
+  }
 
   if (file_path.extension() == ".step"
       || file_path.extension() == ".stp") {

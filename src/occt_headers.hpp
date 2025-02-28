@@ -40,3 +40,4 @@
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <Geom2d_BSplineCurve.hxx>
 #include <BRepAdaptor_Curve2d.hxx>
+#include <ShapeUpgrade_ShapeDivideClosedEdges.hxx>

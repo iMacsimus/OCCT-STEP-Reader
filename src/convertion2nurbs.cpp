@@ -24,54 +24,60 @@ heal_knots(
       modified.push_back({ vec_knots[i], vec_mults[i] });
     }
   }
-  std::sort(modified.begin(), modified.end());
-  for (int i = modified.size()-1; i >= 0; --i) {
-    auto val = modified[i].first;
-    if ((val < umin) || (val > umax)) {
-      modified.erase(modified.begin()+i);
-      --i;
-    }
-  }
-  if (std::abs(modified[0].first-umin) > 1e-5) {
-    modified.insert(modified.begin(), { umin, p+1 });
-  } else {
-    modified[0].second = p+1;
-  }
-  if (std::abs(modified.back().first-umax) > 1e-5) {
-    modified.push_back({ umax, p + 1 });
-  } else {
-    modified.back().second = p+1;
-  }
+  // std::sort(modified.begin(), modified.end());
+  // for (int i = modified.size()-1; i >= 0; --i) {
+  //   auto val = modified[i].first;
+  //   if ((val < umin) || (val > umax)) {
+  //     modified.erase(modified.begin()+i);
+  //     --i;
+  //   }
+  // }
+  // if (std::abs(modified[0].first-umin) > 1e-5) {
+  //   modified.insert(modified.begin(), { umin, p+1 });
+  // } else {
+  //   modified[0].second = p+1;
+  // }
+  // if (std::abs(modified.back().first-umax) > 1e-5) {
+  //   modified.push_back({ umax, p + 1 });
+  // } else {
+  //   modified.back().second = p+1;
+  // }
 
-  int count = 2*(p+1);
-  for (int i = 1; i < modified.size()-1; ++i) {
-    auto &[val, mult] = modified[i];
-    if (mult > p) {
-      mult = p;
-    }
-    count += mult;
-  }
+  // int count = 2*(p+1);
+  // for (int i = 1; i < modified.size()-1; ++i) {
+  //   auto &[val, mult] = modified[i];
+  //   if (mult > p) {
+  //     mult = p;
+  //   }
+  //   count += mult;
+  // }
 
-  for (auto &[val, mult]: modified) {
-    if (count == n+p+2) {
-      break;
-    } else if (count < n+p+2 && mult < p+1) {
-      size_t delta = std::min(n+p+2-count, p-mult);
-      mult += delta;
-      count += delta;
-    } else if (count > n+p+2) {
-      size_t delta = std::min(count-n-p-2, mult-1);
-      mult -= delta;
-      count -= delta;
-    }
-  }
+  // for (auto &[val, mult]: modified) {
+  //   if (count == n+p+2) {
+  //     break;
+  //   } else if (count < n+p+2 && mult < p+1) {
+  //     size_t delta = std::min(n+p+2-count, p-mult);
+  //     mult += delta;
+  //     count += delta;
+  //   } else if (count > n+p+2) {
+  //     size_t delta = std::min(count-n-p-2, mult-1);
+  //     mult -= delta;
+  //     count -= delta;
+  //   }
+  // }
 
   std::vector<Standard_Real> result;
   for (auto &[val, mult]: modified) {
     result.insert(result.end(), mult, val);
   }
 
+  for (size_t i = 0; i <= p; ++i) {
+    result[i] = umin;
+    result[result.size()-i-1] = umax;
+  }
+
   assert(result.size() == n+p+2);
+  assert(std::is_sorted(result.begin(), result.end()));
   assert(result.front() == umin);
   assert(result[p] == umin);
   assert(result.back() == umax);
@@ -171,6 +177,14 @@ void output_nurbs(Geom_BSplineSurface *bspline, std::ostream &fout) {
 auto convert_shape(TopoDS_Shape &shape, const TCollection_ExtendedString &name) {
   std::vector<TopoDS_Face> faces;
   BRepBuilderAPI_NurbsConvert convertor;
+  
+  ShapeUpgrade_ShapeDivideClosed div_shape{shape};
+  div_shape.Perform();
+  shape = div_shape.Result();
+  ShapeUpgrade_ShapeDivideClosedEdges div_edges{shape};
+  div_edges.Perform();
+  shape = div_edges.Result();
+  
   int total = 0;
   for (TopExp_Explorer ex(shape, TopAbs_FACE); ex.More(); ex.Next()) {
     std::cout << "Converting \"" << name << "\"'s " << total << "th face to Bspline..." << std::flush;
