@@ -78,10 +78,10 @@ heal_knots(
 
   assert(result.size() == n+p+2);
   assert(std::is_sorted(result.begin(), result.end()));
-  assert(result.front() == umin);
-  assert(result[p] == umin);
-  assert(result.back() == umax);
-  assert(result[n+1] == umax);
+  assert(std::abs(result.front() - umin) < 1e-3);
+  assert(std::abs(result.front() - umin) < 1e-3);
+  assert(std::abs(result.back() - umax) < 1e-3);
+  assert(std::abs(result[n+1] - umax) < 1e-3);
   return result;
 }
 

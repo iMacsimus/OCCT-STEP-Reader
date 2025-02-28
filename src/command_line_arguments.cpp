@@ -5,11 +5,9 @@ std::map<std::string, bool> is_required = {
   { "-h", false },
   { "--file_path", true },
   { "--save_dir", true },
-  { "--brep_no_trim", false },
-  { "--brep", false },
-  { "--log_fails", false },
   { "--no_nurbs", false },
-  { "--no_obj", false }
+  { "--no_obj", false },
+  { "--deflection", false}
 };
 
 const char help_message_cstr[] = 
@@ -31,6 +29,8 @@ Optional:
 * --no_obj: disable .obj files generation
 * --help or -h: description of the command-line options
 understood by OCCT STEP Reader.
+* --deflection <value> - set deflection for 
+tesselated mesh
 
 Arguments can be combined without any restriction. If 
 --help or -h specified, only help message will be printed
@@ -46,22 +46,11 @@ void get_cl_args(
     int argc, const char **argv,
     std::map<std::string, bool> &is_specified,
     std::filesystem::path &file_path,
-    std::filesystem::path &save_dir) {
-  is_specified = {
-    { "--help", false }, 
-    { "-h", false },
-    { "--file_path", false },
-    { "--save_dir", false },
-    { "--brep_no_trim", false },
-    { "--brep", false },
-    { "--log_fails", false },
-    { "--no_nurbs", false },
-    { "--no_obj", false }
-  };
-
+    std::filesystem::path &save_dir,
+    Standard_Real &deflection) {
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
-    if (is_specified.find(arg) == is_specified.end()) {
+    if (is_required.find(arg) == is_required.end()) {
       throw std::invalid_argument(std::string("invalid argument: ")+arg);
     }
     is_specified[arg] = true;
@@ -72,6 +61,11 @@ void get_cl_args(
     if (arg == "--save_dir") {
       save_dir = argv[i+1];
       ++i;
+    }
+    if (arg == "--deflection") {
+      std::stringstream ss;
+      ss << argv[i+1];
+      ss >> deflection;
     }
   }
   if (!is_specified["--help"] && !is_specified["-h"]) {

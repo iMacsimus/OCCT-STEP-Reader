@@ -13,7 +13,8 @@ void get_cl_args(
     int argc, const char **argv,
     std::map<std::string, bool> &is_specified,
     std::filesystem::path &file_path,
-    std::filesystem::path &save_dir);
+    std::filesystem::path &save_dir,
+    Standard_Real &deflection);
 std::string help_message();
 
 class MyProgressIndicator : public Message_ProgressIndicator {
@@ -57,7 +58,7 @@ struct Statistics
   std::vector<std::pair<std::string, TopoDS_Solid>> failed_solids;
 };
 
-void tesselate_shape(const TopoDS_Shape& shape, std::filesystem::path path);
+void tesselate_shape(const TopoDS_Shape& shape, std::filesystem::path path, Standard_Real deflection = 0.1);
 void convert2nurbs(
       const TCollection_ExtendedString &name,
       TopoDS_Shape shape, 

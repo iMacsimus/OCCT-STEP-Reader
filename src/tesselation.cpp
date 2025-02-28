@@ -1,13 +1,13 @@
 #include <filesystem>
 #include "common.hpp"
 
-void tesselate_shape(const TopoDS_Shape& shape, std::filesystem::path path) {
+void tesselate_shape(const TopoDS_Shape& shape, std::filesystem::path path, Standard_Real deflection) {
   Handle(TDocStd_Application) app = new TDocStd_Application;
   Handle(TDocStd_Document) doc;
   app->NewDocument("ConvSTP2obj", doc);
   
   TopLoc_Location aLoc;
-  BRepMesh_IncrementalMesh tesselator(shape, 0.1f, true, 0.5f, true);
+  BRepMesh_IncrementalMesh tesselator(shape, deflection, true, 0.5, true);
   for (TopExp_Explorer aFaceIter (shape, TopAbs_FACE); aFaceIter.More(); aFaceIter.Next()) {
     const TopoDS_Face& aFace = TopoDS::Face(aFaceIter.Current());
     Handle(Poly_Triangulation) aT = BRep_Tool::Triangulation (aFace, aLoc);

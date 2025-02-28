@@ -43,6 +43,8 @@ public:
   bool do_obj = true;
   bool do_nurbs = true;
   std::filesystem::path save_dir;
+  std::string nurbs_filename = "converted.nurbs";
+  Standard_Real tesselation_deflection = 0.1;
 public:
   void process_shape(
     const TopoDS_Shape &shape,
@@ -50,7 +52,6 @@ public:
     const TCollection_ExtendedString&name);
   void process(Handle(TDocStd_Document) doc);
 private:
-  int undef_counter = 0;
   int cur_id = 0;
   void process_recursive(
     const TDF_Label &label, 
@@ -70,13 +71,13 @@ void Converter::process_shape(
   auto cur_name = name+"_#"+cur_id_str.c_str();
   if (do_obj) {
     std::ofstream table(save_dir / "name-col-type.csv", std::ios::app);
-    table << cur_name << ", (" << color.Red() << ", " << color.Green() << ", " << color.Blue() << "), " 
-          << shape2str[shape.ShapeType()] << ";" << std::endl;
+    table << '\"' << cur_name << "\", \"(" << color.Red() << ", " << color.Green() << ", " << color.Blue() << ")\", \"" 
+          << shape2str[shape.ShapeType()] << "\";" << std::endl;
     auto cur_dir = save_dir / (cur_name+".obj").ToExtString();
-    tesselate_shape(shape, cur_dir);
+    tesselate_shape(shape, cur_dir, tesselation_deflection);
   }
   if (do_nurbs) {
-    std::ofstream nurbs_out(save_dir/"converted.nurbs", std::ios::binary | std::ios::app);
+    std::ofstream nurbs_out(save_dir/nurbs_filename, std::ios::binary | std::ios::app);
     convert2nurbs(cur_name, shape, nurbs_out);
   }
   ++cur_id;
@@ -130,13 +131,9 @@ void Converter::process_recursive(
     if (!divide) {
       Handle(TDataStd_Name) maybe_name;
       label.FindAttribute(TDataStd_Name::GetID(), maybe_name);
-      std::string untitled = "Untitled" + std::to_string(undef_counter);
       auto name = (maybe_name.IsNull() 
-                                              ? TCollection_ExtendedString(untitled.c_str()) 
+                                              ? "Untittled"
                                               : maybe_name->Get());
-      if (name == untitled.c_str()) {
-        ++undef_counter;
-      }
 
       process_shape(shape, my_color.rgb, name);
       return;
@@ -150,7 +147,6 @@ void Converter::process_recursive(
 
 void Converter::process(Handle(TDocStd_Document) doc) {
   cur_id = 0;
-  undef_counter = 0;
   auto root = doc->Main();
   auto color_tool = XCAFDoc_DocumentTool::ColorTool(root);
   auto shape_tool = XCAFDoc_DocumentTool::ShapeTool(root);
@@ -163,7 +159,11 @@ int main(int argc, const char **argv) {
   std::filesystem::path file_path, save_dir;
 
   std::map<std::string, bool> is_specified;
-  get_cl_args(argc, argv, is_specified, file_path, save_dir);
+  Standard_Real deflection = 0.1;
+  get_cl_args(argc, argv, is_specified, file_path, save_dir, deflection);
+
+  auto nurbs_name = file_path.filename();
+  nurbs_name.replace_extension(".nurbs");
 
   if (is_specified["--help"] 
       || is_specified["-h"]) {
@@ -173,11 +173,11 @@ int main(int argc, const char **argv) {
 
   std::filesystem::create_directories(save_dir);
   if (!is_specified["--no_nurbs"]) {
-    std::ofstream nurbs_out(save_dir/"converted.nurbs", std::ios::trunc | std::ios::binary);
+    std::ofstream nurbs_out(save_dir/nurbs_name, std::ios::trunc | std::ios::binary);
     nurbs_out.write("VERSION 201", 11);
   }
   if (!is_specified["--no_obj"]) {
-    std::ofstream(save_dir/"name-col-type.svg", std::ios::trunc);
+    std::ofstream(save_dir/"name-col-type.csv", std::ios::trunc);
   }
 
   if (file_path.extension() == ".step"
@@ -212,6 +212,8 @@ int main(int argc, const char **argv) {
     converter.do_nurbs = !is_specified["--no_nurbs"];
     converter.do_obj = !is_specified["--no_obj"];
     converter.save_dir = save_dir;
+    converter.tesselation_deflection = deflection;
+    converter.nurbs_filename = nurbs_name;
     converter.process(doc);
   } else {
     throw std::invalid_argument(
