@@ -59,7 +59,19 @@ struct Statistics
 };
 
 void tesselate_shape(const TopoDS_Shape& shape, std::filesystem::path path, Standard_Real deflection = 0.1);
-void convert2nurbs(
-      const TCollection_ExtendedString &name,
-      TopoDS_Shape shape, 
-      std::ofstream &fout);
+
+void convert2nurbs(const TCollection_ExtendedString &name, TopoDS_Shape shape,
+  Quantity_Color color,
+  std::ofstream &fout);
+
+constexpr const char *shape2str[] = {
+  "TopAbs_COMPOUND",
+  "TopAbs_COMPSOLID",
+  "TopAbs_SOLID",
+  "TopAbs_SHELL",
+  "TopAbs_FACE",
+  "TopAbs_WIRE",
+  "TopAbs_EDGE",
+  "TopAbs_VERTEX",
+  "TopAbs_SHAPE"
+};

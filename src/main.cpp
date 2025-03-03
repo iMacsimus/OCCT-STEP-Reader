@@ -15,18 +15,6 @@
 
 #include "common.hpp"
 
-constexpr const char *shape2str[] = {
-  "TopAbs_COMPOUND",
-  "TopAbs_COMPSOLID",
-  "TopAbs_SOLID",
-  "TopAbs_SHELL",
-  "TopAbs_FACE",
-  "TopAbs_WIRE",
-  "TopAbs_EDGE",
-  "TopAbs_VERTEX",
-  "TopAbs_SHAPE"
-};
-
 struct ColorInfo
 {
   Quantity_Color rgb = Quantity_NOC_WHITE;
@@ -78,7 +66,7 @@ void Converter::process_shape(
   }
   if (do_nurbs) {
     std::ofstream nurbs_out(save_dir/nurbs_filename, std::ios::binary | std::ios::app);
-    convert2nurbs(cur_name, shape, nurbs_out);
+    convert2nurbs(cur_name, shape, color, nurbs_out);
   }
   ++cur_id;
 }
