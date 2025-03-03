@@ -169,8 +169,7 @@ void convert2nurbs(const TCollection_ExtendedString &name, TopoDS_Shape shape,
   BRep_Builder builder;
 
   auto faces = convert_shape(shape, name);
-  binout(fout, static_cast<int>(faces.size()));
-
+  
   std::cout << "Output \"" << name << "\" to .nurbs..." << std::flush;
   TCollection_AsciiString name_ascii = name;
   std::string name_str = name_ascii.ToCString();
@@ -179,6 +178,8 @@ void convert2nurbs(const TCollection_ExtendedString &name, TopoDS_Shape shape,
   binout(fout, static_cast<float>(color.Red()));
   binout(fout, static_cast<float>(color.Green()));
   binout(fout, static_cast<float>(color.Blue()));
+  binout(fout, static_cast<int>(faces.size()));
+
   for (auto &face : faces) {
     BRepAdaptor_Surface surface(face);
     auto type = surface.GetType();
